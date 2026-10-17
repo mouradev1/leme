@@ -84,8 +84,8 @@ apps/desktop/          The desktop app: Go backend (client-go) + Vue 3 UI, packa
   frontend/            Vue 3 + TypeScript + Tailwind UI
   build/               App icon, platform packaging (Linux .deb, Dockerfile)
   scripts/             Local build helpers (macOS install, Linux via Docker, security audit)
-docs/                  Project website, published to GitHub Pages
-.github/workflows/     CI, release builds (macOS, Windows, Linux) and Pages deploy
+docs/                  Project website (GitHub Pages, served from this folder)
+.github/workflows/     CI and release builds (macOS, Windows, Linux)
 ```
 
 ## Build from source
@@ -116,8 +116,9 @@ git push origin v0.1.0
 To test the pipeline without publishing, run the **Release** workflow manually
 (Actions tab): it creates a draft release.
 
-The project page in `docs/` is deployed by the **Pages** workflow. Enable it
-once in *Settings > Pages > Source: GitHub Actions*.
+The project page is published by GitHub Pages straight from the `docs/` folder
+of `main` (*Settings > Pages > Deploy from a branch: main, /docs*). Every push
+to `main` updates it: https://mouradev1.github.io/leme/
 
 ## Support
 
