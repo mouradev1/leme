@@ -71,6 +71,13 @@ export type View =
   | { type: 'helm' }
   | { type: 'resource'; kind: resources.Kind }
 
+// cluster: the kubeconfig context the tab was opened in. A tab ALWAYS talks to
+// that cluster, never to whichever cluster is active now (a shell must not
+// silently end up on another cluster when the user switches).
 export type DockTab =
-  | { id: string; type: 'logs'; title: string; namespace: string; pod: string; containers: string[]; previous?: boolean }
-  | { id: string; type: 'shell'; title: string; target?: terminal.ExecTarget; node?: string }
+  | { id: string; cluster: string; type: 'logs'; title: string; namespace: string; pod: string; containers: string[]; previous?: boolean }
+  | { id: string; cluster: string; type: 'shell'; title: string; target?: terminal.ExecTarget; node?: string }
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+/** A tab as requested by the UI; the active cluster is stamped on open. */
+export type NewDockTab = DistributiveOmit<DockTab, 'cluster'>

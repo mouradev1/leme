@@ -16,7 +16,7 @@ import { useClusters } from '@/stores/clusters'
 import { usePanelWidth } from '@/lib/resize'
 import { errMsg, newId, on } from '@/lib/bridge'
 import { hue, initials } from '@/lib/dom'
-import type { DockTab, NavigateTarget, Row, RowAction, View } from '@/lib/types'
+import type { DockTab, NavigateTarget, NewDockTab, Row, RowAction, View } from '@/lib/types'
 
 const store = useClusters()
 const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs(store)
@@ -39,7 +39,10 @@ async function openCluster(name: string) {
 }
 
 // ---- YAML editor panel -----------------------------------------------------
-const editing = shallowRef<{ kind?: resources.Ref; namespace?: string; name?: string; initialYaml?: string; key: string } | null>(null)
+// cluster: the editor is bound to the cluster it was opened in (never the
+// active one), and closes when the user switches clusters.
+const editing = shallowRef<{ cluster: string; kind?: resources.Ref; namespace?: string; name?: string; initialYaml?: string; key: string } | null>(null)
+watch(active, () => (editing.value = null))
 
 // Changing view clears the search, unless the change came from a link.
 let keepSearch = false
@@ -73,14 +76,25 @@ function createTemplate(k: resources.Kind): string {
 const tabs = ref<DockTab[]>([])
 const activeTab = ref('')
 const dockMax = ref(false)
-function openTab(t: DockTab) {
-  tabs.value.push(t)
-  activeTab.value = t.id
+// Tabs are bound to the cluster they were opened in. Switching clusters shows
+// only that cluster's tabs; the others stay alive (hidden) and come back.
+const lastTabByCluster = new Map<string, string>()
+const clusterTabs = (c: string) => tabs.value.filter((t) => t.cluster === c)
+function openTab(t: NewDockTab) {
+  const tab = { ...t, cluster: active.value } as DockTab
+  tabs.value.push(tab)
+  activeTab.value = tab.id
 }
 function closeTab(id: string) {
   tabs.value = tabs.value.filter((t) => t.id !== id) // unmount => unsubscribe / close PTY
-  if (activeTab.value === id) activeTab.value = tabs.value.at(-1)?.id ?? ''
+  if (activeTab.value === id) activeTab.value = clusterTabs(active.value).at(-1)?.id ?? ''
 }
+watch(activeTab, (id) => { if (active.value && id) lastTabByCluster.set(active.value, id) })
+watch(active, (c) => {
+  const remembered = lastTabByCluster.get(c)
+  const mine = clusterTabs(c)
+  activeTab.value = mine.find((t) => t.id === remembered)?.id ?? mine.at(-1)?.id ?? ''
+})
 const newTerminal = () => openTab({ id: newId(), type: 'shell', title: `local · ${active.value}` })
 
 // ---- Confirm / prompt dialog -------------------------------------------------
@@ -91,6 +105,9 @@ async function confirmDialog() {
   try { await d.run(d.input) } catch (e) { flash(errMsg(e)) }
 }
 const confirm = (title: string, run: () => Promise<void>, danger = false) => (dialog.value = { title, run, danger })
+// A pending confirmation (delete, drain, node shell...) belongs to the cluster
+// it was asked in: never let it be confirmed while looking at another cluster.
+watch(active, () => (dialog.value = null))
 
 // kind: the object's own kind (a node opened from the pod list is a Node).
 async function onAction(action: RowAction, row: Row, kind?: resources.Kind) {
@@ -99,7 +116,7 @@ async function onAction(action: RowAction, row: Row, kind?: resources.Kind) {
   const ns = row.namespace ?? ''
   switch (action) {
     case 'edit':
-      editing.value = { kind: k, namespace: ns, name: row.name, key: newId() }
+      editing.value = { cluster: active.value, kind: k, namespace: ns, name: row.name, key: newId() }
       break
     case 'logs':
     case 'shell': {
@@ -188,7 +205,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
                 v-else :key="`${active}|${view.kind.group}/${view.kind.resource}`"
                 v-model:search="search" :cluster="active" :kind="view.kind"
                 @action="onAction" @bulk-delete="bulkDelete" @navigate="navigate" @container="onContainer"
-                @create="editing = { initialYaml: createTemplate(view.kind), key: newId() }"
+                @create="editing = { cluster: active, initialYaml: createTemplate(view.kind), key: newId() }"
               />
             </template>
 
@@ -227,7 +244,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
               @mousedown="editorPanel.start" @dblclick="editorPanel.reset"
             />
             <YamlEditor
-              :key="editing.key" :cluster="active" :kind="editing.kind" :namespace="editing.namespace"
+              :key="editing.key" :cluster="editing.cluster" :kind="editing.kind" :namespace="editing.namespace"
               :name="editing.name" :initial-yaml="editing.initialYaml"
               @close="editing = null" @applied="flash('Aplicado com sucesso')"
             />

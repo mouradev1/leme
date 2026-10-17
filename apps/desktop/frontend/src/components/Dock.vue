@@ -4,7 +4,7 @@
  * resized (drag the top edge), collapsed and maximized. Tabs stay mounted
  * (v-show) so shells and log streams survive switching tabs.
  */
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { DockTab } from '@/lib/types'
 import LogViewer from './LogViewer.vue'
 import TerminalPane from './TerminalPane.vue'
@@ -15,11 +15,17 @@ const active = defineModel<string>('active', { required: true })
 const maximized = defineModel<boolean>('maximized', { default: false })
 const emit = defineEmits<{ close: [id: string]; newTerminal: [] }>()
 
-const height = ref(Number(safeGet('leme:dock-h')) || 320)
-const collapsed = ref(props.tabs.length === 0)
+// `tabs` holds every cluster's tabs; only the active cluster's are shown. The
+// others stay mounted (hidden) so their shells/log streams keep running.
+const visible = computed(() => props.tabs.filter((t) => t.cluster === props.cluster))
+const elsewhere = computed(() => props.tabs.filter((t) => t.cluster !== props.cluster))
+const elsewhereClusters = computed(() => [...new Set(elsewhere.value.map((t) => t.cluster))].join(', '))
 
-// Opening a tab always reveals the dock.
-watch(() => props.tabs.length, (n, old) => {
+const height = ref(Number(safeGet('leme:dock-h')) || 320)
+const collapsed = ref(visible.value.length === 0)
+
+// Opening a tab always reveals the dock; a cluster without tabs collapses it.
+watch(() => visible.value.length, (n, old) => {
   if (n > old) collapsed.value = false
   if (n === 0) { collapsed.value = true; maximized.value = false }
 })
@@ -69,10 +75,10 @@ function toggleMax() {
 
     <div class="flex h-[34px] shrink-0 items-center gap-0.5 px-2 text-xs" @dblclick.self="toggleMax">
       <button
-        v-for="t in tabs" :key="t.id"
+        v-for="t in visible" :key="t.id"
         class="group flex h-7 max-w-56 items-center gap-1.5 rounded-md px-2.5"
         :class="t.id === active && !collapsed ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'"
-        :title="t.title"
+        :title="`${t.title} (${t.cluster})`"
         @click="active = t.id; collapsed = false"
       >
         <Icon :name="t.type === 'logs' ? 'logs' : 'terminal'" :size="13" :class="t.type === 'logs' ? 'text-amber-400' : 'text-emerald-400'" />
@@ -84,22 +90,27 @@ function toggleMax() {
       <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Novo terminal local" @click="emit('newTerminal')">
         <Icon name="plus" :size="14" />
       </button>
-      <span v-if="!tabs.length" class="ml-1 text-zinc-600">Terminal</span>
+      <span v-if="!visible.length" class="ml-1 text-zinc-600">Terminal</span>
+      <span
+        v-if="elsewhere.length" class="ml-2 rounded-full border border-zinc-800 px-2 py-0.5 text-[11px] text-zinc-500"
+        :title="`Abas abertas em: ${elsewhereClusters}. Elas continuam conectadas aos seus clusters e voltam quando você trocar para eles.`"
+      >{{ elsewhere.length }} em outros clusters</span>
 
       <div class="ml-auto flex items-center gap-0.5">
-        <button v-if="tabs.length" class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="maximized ? 'Restaurar' : 'Maximizar'" @click="toggleMax">
+        <button v-if="visible.length" class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="maximized ? 'Restaurar' : 'Maximizar'" @click="toggleMax">
           <Icon :name="maximized ? 'restore' : 'maximize'" :size="14" />
         </button>
-        <button v-if="tabs.length" class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="collapsed ? 'Expandir' : 'Recolher'" @click="toggleCollapse">
+        <button v-if="visible.length" class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="collapsed ? 'Expandir' : 'Recolher'" @click="toggleCollapse">
           <Icon :name="collapsed ? 'expand' : 'collapse'" :size="14" />
         </button>
       </div>
     </div>
 
     <div v-show="!collapsed" class="relative min-h-0 flex-1 border-t border-zinc-800/80">
-      <div v-for="t in tabs" v-show="t.id === active" :key="t.id" class="absolute inset-0">
-        <LogViewer v-if="t.type === 'logs'" :cluster="cluster" :namespace="t.namespace" :pod="t.pod" :containers="t.containers" :previous="t.previous" />
-        <TerminalPane v-else :cluster="cluster" :target="t.target" :node="t.node" />
+      <!-- Each pane talks to ITS tab's cluster (t.cluster), never the active one. -->
+      <div v-for="t in tabs" v-show="t.id === active && t.cluster === cluster" :key="t.id" class="absolute inset-0">
+        <LogViewer v-if="t.type === 'logs'" :cluster="t.cluster" :namespace="t.namespace" :pod="t.pod" :containers="t.containers" :previous="t.previous" />
+        <TerminalPane v-else :cluster="t.cluster" :target="t.target" :node="t.node" />
       </div>
     </div>
   </section>
