@@ -1,0 +1,4 @@
+# Shows the "Sponsor" button on the GitHub repository page.
+custom:
+  - "https://link.mercadopago.com.br/dindinplanejado"  # Brazil: Pix or card, in BRL
+  - "https://www.paypal.com/donate/?hosted_button_id=XRVF9PMEBWVUA"  # international

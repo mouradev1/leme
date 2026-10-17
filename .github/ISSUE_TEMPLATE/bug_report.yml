@@ -1,0 +1,50 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste kubeconfigs, tokens, certificates or Secret values.**
+        Security issues: please use *Security > Report a vulnerability* instead.
+  - type: input
+    id: version
+    attributes:
+      label: Leme version
+      description: Shown at the bottom of the sidebar.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS (Apple Silicon), macOS (Intel), Windows, Linux x86_64, Linux ARM64]
+    validations:
+      required: true
+  - type: input
+    id: cluster
+    attributes:
+      label: Kubernetes version / distribution
+      placeholder: v1.32 on AKS, kind, k3s...
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open cluster ...
+        2. Go to ...
+        3. See error ...
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or logs
+      description: Redact cluster names or anything sensitive.
