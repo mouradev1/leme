@@ -21,6 +21,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # 0.53+ restructured the package (import paths, editor features, codicon
+      # font). Pinned at 0.52 until a deliberate, tested migration.
+      - dependency-name: "monaco-editor"
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
