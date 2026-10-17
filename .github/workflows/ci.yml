@@ -8,6 +8,7 @@ on:
     paths: ["apps/desktop/**", ".github/workflows/ci.yml"]
   pull_request:
     paths: ["apps/desktop/**", ".github/workflows/ci.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: read

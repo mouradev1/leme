@@ -1,15 +1,29 @@
-# Weekly dependency updates (security fixes arrive as PRs).
+# Weekly dependency updates. Minor/patch updates arrive grouped (one PR per
+# ecosystem); major versions are ignored here and upgraded deliberately, since
+# they usually need code changes. Security updates still arrive individually.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /apps/desktop
     schedule: { interval: weekly }
     groups:
-      kubernetes:
-        patterns: ["k8s.io/*", "sigs.k8s.io/*", "helm.sh/*"]
+      go-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /apps/desktop/frontend
     schedule: { interval: weekly }
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ["*"]
