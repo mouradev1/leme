@@ -1,0 +1,191 @@
+# Builds Leme for macOS, Windows and Linux and publishes a GitHub Release.
+#
+#   git tag v0.2.0 && git push origin v0.2.0      -> public release
+#   Actions > Release > Run workflow (version)    -> draft release (for testing)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the leading v (e.g. 0.2.0). Creates a DRAFT release."
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.16.0
+  NODE_VERSION: "20"
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = "push" ]; then v="${TAG#v}"; else v="${INPUT#v}"; fi
+          # Strict semver: the value ends up in file names and build flags.
+          if ! printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::invalid version '$v' (expected e.g. 1.2.3 or 1.2.3-rc.1)"; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: meta
+    runs-on: macos-14
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/frontend/package-lock.json
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+      - name: Stamp version
+        run: python3 -c 'import json,os;p="wails.json";w=json.load(open(p));w["info"]["productVersion"]=os.environ["VERSION"];json.dump(w,open(p,"w"),indent=2)'
+      - name: Build (universal - Apple Silicon + Intel)
+        run: wails build -clean -trimpath -platform darwin/universal -ldflags "-s -w -X main.version=${VERSION}"
+      - name: Third-party notices
+        run: bash scripts/third-party-notices.sh
+      - name: Package .dmg and .zip
+        run: |
+          mkdir -p out stage
+          cp -R build/bin/Leme.app stage/
+          cp THIRD_PARTY_NOTICES.txt ../../LICENSE stage/
+          ln -s /Applications stage/Applications
+          hdiutil create -volname Leme -srcfolder stage -fs HFS+ -size 300m -format UDZO "out/Leme-${VERSION}-macos-universal.dmg"
+          ditto -c -k --keepParent build/bin/Leme.app "out/Leme-${VERSION}-macos-universal.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: apps/desktop/out/*
+          if-no-files-found: error
+
+  windows:
+    needs: meta
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    defaults:
+      run:
+        working-directory: apps/desktop
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/frontend/package-lock.json
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@$env:WAILS_VERSION
+      - name: Install NSIS (installer builder)
+        run: |
+          choco install nsis -y --no-progress
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Stamp version
+        run: python -c 'import json,os;p="wails.json";w=json.load(open(p));w["info"]["productVersion"]=os.environ["VERSION"];json.dump(w,open(p,"w"),indent=2)'
+      - name: Build (exe + NSIS installer)
+        run: wails build -clean -trimpath -platform windows/amd64 -nsis -ldflags "-s -w -X main.version=$env:VERSION"
+      - name: Collect
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item build/bin/Leme.exe "out/Leme-$env:VERSION-windows-amd64.exe"
+          $installer = Get-ChildItem build/bin -Filter "*installer*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer not found" }
+          Copy-Item $installer.FullName "out/Leme-$env:VERSION-windows-amd64-setup.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: apps/desktop/out/*
+          if-no-files-found: error
+
+  linux:
+    needs: meta
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04 # glibc 2.35: runs on Ubuntu 22.04+, Debian 12+, Fedora 36+
+            arch: amd64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      ARCH: ${{ matrix.arch }}
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries (GTK3 + WebKitGTK 4.1)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/desktop/frontend/package-lock.json
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+      - name: Build
+        run: wails build -clean -trimpath -tags webkit2_41 -ldflags "-s -w -X main.version=${VERSION}" -o leme
+      - name: Third-party notices
+        run: bash scripts/third-party-notices.sh
+      - name: Package (binary + .deb)
+        run: |
+          mkdir -p out
+          if [ "$ARCH" = amd64 ]; then cp THIRD_PARTY_NOTICES.txt out/; fi
+          cp build/bin/leme "out/leme-${VERSION}-linux-${ARCH}"
+          bash build/linux/package-deb.sh build/bin/leme "${VERSION}" "${ARCH}" out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: apps/desktop/out/*
+          if-no-files-found: error
+
+  release:
+    needs: [meta, macos, windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        working-directory: out
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.meta.outputs.version }}
+          name: Leme v${{ needs.meta.outputs.version }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: ${{ contains(needs.meta.outputs.version, '-') }}
+          generate_release_notes: true
+          files: out/*
+          fail_on_unmatched_files: true

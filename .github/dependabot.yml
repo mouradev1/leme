@@ -1,0 +1,15 @@
+# Weekly dependency updates (security fixes arrive as PRs).
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /apps/desktop
+    schedule: { interval: weekly }
+    groups:
+      kubernetes:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*", "helm.sh/*"]
+  - package-ecosystem: npm
+    directory: /apps/desktop/frontend
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

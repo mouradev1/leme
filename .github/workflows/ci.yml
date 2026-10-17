@@ -1,0 +1,52 @@
+# Checks every push and pull request: Go tests, frontend type-check/build and
+# a dependency vulnerability scan (Go + npm).
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/desktop/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["apps/desktop/**", ".github/workflows/ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries (GTK3 + WebKitGTK 4.1)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/desktop/go.mod
+          cache-dependency-path: apps/desktop/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/desktop/frontend/package-lock.json
+
+      - name: Go vet + tests
+        run: |
+          mkdir -p frontend/dist && touch frontend/dist/.keep  # embed target before the UI is built
+          go vet ./...
+          go test -race ./...
+      - name: Go vulnerabilities (reachable code only)
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: Go module integrity
+        run: go mod verify
+
+      - name: Frontend
+        working-directory: apps/desktop/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npx vite build
+          npm audit --omit=dev --audit-level=high
+          npm audit signatures
