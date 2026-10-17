@@ -156,7 +156,7 @@
     .card p { margin: 0; color: var(--text-2); font-size: 14.5px; }
 
     .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .dl { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; }
+    .dl { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; min-width: 0; }
     .dl.current { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     .dl h3 { margin: 0 0 4px; font-size: 18px; }
     .dl .req { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
@@ -169,6 +169,18 @@
     .dl summary { cursor: pointer; color: var(--text); }
     .dl pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 12.5px; }
     .release-note { color: var(--muted); font-size: 14px; margin-top: 16px; }
+    .firstrun { margin-top: auto; font-size: 14px; color: var(--text-2); border-top: 1px solid var(--border); padding-top: 14px; }
+    .firstrun b { color: var(--text); }
+    .firstrun p { margin: 6px 0; }
+    .firstrun ol { margin: 8px 0; padding-left: 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .firstrun li { min-width: 0; }
+    .firstrun .alt { color: var(--muted); font-size: 13px; }
+    .cmd { display: flex; align-items: center; gap: 6px; margin-top: 6px; background: var(--surface-2); border: 1px solid var(--border);
+           border-radius: 8px; padding: 6px 6px 6px 10px; }
+    .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 12px; color: var(--text); }
+    .cmd button { flex: none; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+                  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .cmd button:hover { border-color: var(--accent); color: var(--accent); }
 
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
     ul.check { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
@@ -364,12 +376,18 @@
           <h3>macOS</h3>
           <div class="req">macOS 12 ou mais novo · Apple Silicon e Intel</div>
           <div class="files" data-files="mac"></div>
-          <details>
-            <summary>Primeira abertura</summary>
-            <p>O app ainda não é assinado pela Apple. Arraste o Leme para Aplicativos e libere uma vez:</p>
-            <pre>xattr -dr com.apple.quarantine /Applications/Leme.app</pre>
-            <p>Ou abra Ajustes do Sistema → Privacidade e Segurança → “Abrir Mesmo Assim”.</p>
-          </details>
+          <div class="firstrun">
+            <b>Primeira abertura</b>
+            <p>O app ainda não é assinado pela Apple, então o macOS bloqueia a primeira abertura (“A Apple não pôde verificar…”). Libere uma vez:</p>
+            <ol>
+              <li>Abra o <code>.dmg</code> e arraste o <b>Leme</b> para <b>Applications</b>.</li>
+              <li>No Terminal, rode:
+                <div class="cmd"><code id="mac-cmd">xattr -dr com.apple.quarantine /Applications/Leme.app</code><button type="button" data-copy="mac-cmd">Copiar</button></div>
+              </li>
+              <li>Abra o Leme pelo Launchpad ou Spotlight.</li>
+            </ol>
+            <p class="alt">Sem Terminal: tente abrir o app, depois vá em Ajustes do Sistema → Privacidade e Segurança e clique em “Abrir Mesmo Assim”.</p>
+          </div>
         </div>
         <div class="dl" data-os="windows">
           <h3>Windows</h3>
@@ -464,6 +482,15 @@ wails build    <span class="c"># gera o app em build/bin</span></pre>
     if (repo) {
       document.querySelectorAll('.repo-link').forEach((a) => { a.href = `https://github.com/${repo}`; a.hidden = false })
     }
+
+    // Copy buttons for install commands.
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const text = document.getElementById(btn.dataset.copy).textContent
+        try { await navigator.clipboard.writeText(text); btn.textContent = 'Copiado' } catch { btn.textContent = 'Selecione e copie' }
+        setTimeout(() => (btn.textContent = 'Copiar'), 2000)
+      })
+    })
 
     // Real screenshot replaces the CSS mock when docs/assets/screenshot.png exists.
     // Swap the illustration for a real screenshot if docs/assets/screenshot.png exists.

@@ -3,9 +3,10 @@
 name: Pages
 
 on:
+  # Every push to main redeploys (takes ~30s). No path filter: path filters
+  # can skip the very first push of a repository, which left the site at 404.
   push:
     branches: [main]
-    paths: ["docs/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:

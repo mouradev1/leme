@@ -59,8 +59,18 @@ Grab the latest build from [Releases](../../releases/latest):
 
 Every release ships a `SHA256SUMS.txt`.
 
-**macOS**: builds are not notarized yet. After moving Leme to Applications run
-`xattr -dr com.apple.quarantine /Applications/Leme.app` once.
+**macOS, first launch**: builds are not notarized by Apple yet, so macOS blocks
+the first launch ("Apple could not verify Leme is free of malware"). Once:
+
+1. Open the `.dmg` and drag **Leme** to **Applications**.
+2. In Terminal run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Leme.app
+   ```
+3. Open Leme from Launchpad or Spotlight.
+
+Without Terminal: try to open it, then *System Settings > Privacy & Security >
+Open Anyway*.
 
 **Linux**: the standalone binary installs itself into your app menu the first
 time you run it (no root). Remove it with `~/.local/bin/leme --uninstall`.

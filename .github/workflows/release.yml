@@ -187,5 +187,26 @@ jobs:
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ contains(needs.meta.outputs.version, '-') }}
           generate_release_notes: true
+          body: |
+            ## Install
+
+            | OS | File |
+            |---|---|
+            | macOS 12+ (Apple Silicon and Intel) | `Leme-${{ needs.meta.outputs.version }}-macos-universal.dmg` |
+            | Windows 10/11 | `Leme-${{ needs.meta.outputs.version }}-windows-amd64-setup.exe` |
+            | Linux (Ubuntu/Debian) | `leme_${{ needs.meta.outputs.version }}_amd64.deb` (or `_arm64`) |
+            | Linux (any distro) | `leme-${{ needs.meta.outputs.version }}-linux-amd64`: run once, it installs itself in the app menu |
+
+            **macOS first launch.** The app is not notarized by Apple yet, so macOS blocks the first launch. Drag Leme to Applications, then run once in Terminal:
+
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/Leme.app
+            ```
+
+            **Windows.** If SmartScreen warns, click *More info > Run anyway*.
+
+            **Linux.** Requires WebKitGTK 4.1 (`libwebkit2gtk-4.1-0`).
+
+            Verify downloads with `SHA256SUMS.txt`. Licenses of bundled components: `THIRD_PARTY_NOTICES.txt`.
           files: out/*
           fail_on_unmatched_files: true
