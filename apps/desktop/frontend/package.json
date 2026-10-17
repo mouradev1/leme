@@ -15,7 +15,7 @@
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "monaco-editor": "^0.52.2",
-    "pinia": "^3.0.3",
+    "pinia": "^4.1.0",
     "vue": "^3.5.18"
   },
   "devDependencies": {
