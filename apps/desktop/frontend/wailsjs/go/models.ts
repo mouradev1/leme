@@ -528,7 +528,6 @@ export namespace resources {
 	
 	export class ApplyOptions {
 	    dryRun: boolean;
-	    force: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ApplyOptions(source);
@@ -537,7 +536,20 @@ export namespace resources {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.dryRun = source["dryRun"];
-	        this.force = source["force"];
+	    }
+	}
+	export class ApplyResult {
+	    yaml: string;
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.yaml = source["yaml"];
+	        this.warnings = source["warnings"];
 	    }
 	}
 	export class Kind {

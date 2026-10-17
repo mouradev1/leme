@@ -5,7 +5,7 @@ import {ops} from '../models';
 import {api} from '../models';
 import {pods} from '../models';
 
-export function Apply(arg1:string,arg2:string,arg3:resources.ApplyOptions):Promise<string>;
+export function Apply(arg1:string,arg2:string,arg3:resources.ApplyOptions):Promise<resources.ApplyResult>;
 
 export function Catalog(arg1:string):Promise<Array<resources.Kind>>;
 

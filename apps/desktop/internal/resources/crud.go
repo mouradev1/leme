@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/yaml"
@@ -31,49 +33,65 @@ func GetYAML(ctx context.Context, s *cluster.Session, ref Ref, ns, name string) 
 
 type ApplyOptions struct {
 	DryRun bool `json:"dryRun"` // server-side dry run: validates + returns the would-be object
-	Force  bool `json:"force"`  // take ownership of fields owned by other managers (kubectl, helm...)
 }
 
-// Apply server-side-applies one or more YAML/JSON documents.
+// ApplyResult is what the editor shows after applying.
+type ApplyResult struct {
+	YAML string `json:"yaml"`
+	// Warnings: e.g. the object is also managed by a deploy tool (Argo CD,
+	// Flux, Helm, a CI pipeline) that may revert a manual edit on its next run.
+	Warnings []string `json:"warnings"`
+}
+
+// Apply saves one or more YAML/JSON documents with "edit" semantics, like
+// `kubectl edit`: an existing object is replaced by exactly what's in the
+// editor (changed AND removed fields take effect), a new one is created.
 //
+// Why not server-side apply: SSA tracks an owner per field, so editing a field
+// owned by another tool fails with a conflict, and removing such a field from
+// the YAML is silently ignored. Neither is what "edit this YAML" means.
+//
+// Safety is kept:
 //   - Validation is the API server's own (fieldValidation=Strict): unknown or
 //     duplicated fields, CRD OpenAPI schemas and admission webhooks all run.
-//   - The editor's diff view = GetYAML (live) vs Apply(DryRun) (result), which
-//     shows defaulting/mutation exactly as the cluster would persist it.
-//   - A metadata.resourceVersion left in the YAML acts as an optimistic lock,
-//     so saving a stale editor buffer fails with a Conflict instead of
-//     silently overwriting someone else's change.
-func Apply(ctx context.Context, s *cluster.Session, doc string, o ApplyOptions) (string, error) {
+//   - The editor's diff = GetYAML (live) vs Apply(DryRun) (result), showing
+//     defaulting/mutation exactly as the cluster would persist it.
+//   - metadata.resourceVersion in the YAML is an optimistic lock: saving a
+//     stale editor buffer fails instead of overwriting someone else's change.
+func Apply(ctx context.Context, s *cluster.Session, doc string, o ApplyOptions) (ApplyResult, error) {
 	dec := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(doc), 4096)
-	var results []string
+	var res ApplyResult
+	var docs []string
 	for {
 		obj := &unstructured.Unstructured{}
 		if err := dec.Decode(&obj.Object); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return "", fmt.Errorf("parse yaml: %w", err)
+			return res, fmt.Errorf("YAML inválido: %w", err)
 		}
 		if len(obj.Object) == 0 {
 			continue // empty document between "---"
 		}
-		out, err := applyOne(ctx, s, obj, o)
+		out, warnings, err := applyOne(ctx, s, obj, o)
 		if err != nil {
-			return "", fmt.Errorf("%s %q: %w", obj.GetKind(), obj.GetName(), err)
+			return res, fmt.Errorf("%s %q: %w", obj.GetKind(), obj.GetName(), friendly(err))
 		}
-		results = append(results, out)
+		docs = append(docs, out)
+		res.Warnings = append(res.Warnings, warnings...)
 	}
-	return strings.Join(results, "---\n"), nil
+	res.YAML = strings.Join(docs, "---\n")
+	return res, nil
 }
 
-func applyOne(ctx context.Context, s *cluster.Session, obj *unstructured.Unstructured, o ApplyOptions) (string, error) {
+func applyOne(ctx context.Context, s *cluster.Session, obj *unstructured.Unstructured, o ApplyOptions) (string, []string, error) {
 	gvk := obj.GroupVersionKind()
 	mapping, err := s.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var ri dynamic.ResourceInterface = s.Dynamic.Resource(mapping.Resource)
-	if mapping.Scope.Name() == "namespace" {
+	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
 		ns := obj.GetNamespace()
 		if ns == "" {
 			ns = s.DefaultNamespace()
@@ -81,22 +99,82 @@ func applyOne(ctx context.Context, s *cluster.Session, obj *unstructured.Unstruc
 		}
 		ri = s.Dynamic.Resource(mapping.Resource).Namespace(ns)
 	}
-	obj.SetManagedFields(nil) // SSA rejects payloads that carry managedFields
-	unstructured.RemoveNestedField(obj.Object, "status")
+	// managedFields are hidden in the editor; nil means "leave as is" on update.
+	obj.SetManagedFields(nil)
+	unstructured.RemoveNestedField(obj.Object, "status") // status is owned by controllers
 
-	body, err := obj.MarshalJSON()
-	if err != nil {
-		return "", err
-	}
-	opts := metav1.PatchOptions{FieldManager: FieldManager, Force: &o.Force, FieldValidation: "Strict"}
+	var dryRun []string
 	if o.DryRun {
-		opts.DryRun = []string{metav1.DryRunAll}
+		dryRun = []string{metav1.DryRunAll}
 	}
-	out, err := ri.Patch(ctx, obj.GetName(), types.ApplyPatchType, body, opts)
+
+	current, err := ri.Get(ctx, obj.GetName(), metav1.GetOptions{})
+	var out *unstructured.Unstructured
+	switch {
+	case apierrors.IsNotFound(err):
+		obj.SetResourceVersion("")
+		out, err = ri.Create(ctx, obj, metav1.CreateOptions{FieldManager: FieldManager, FieldValidation: "Strict", DryRun: dryRun})
+	case err != nil:
+		return "", nil, err
+	default:
+		out, err = ri.Update(ctx, obj, metav1.UpdateOptions{FieldManager: FieldManager, FieldValidation: "Strict", DryRun: dryRun})
+	}
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return toYAML(out)
+	y, err := toYAML(out)
+	if err != nil {
+		return "", nil, err
+	}
+	var warnings []string
+	if current != nil && err == nil {
+		if tools := externalManagers(current); len(tools) > 0 {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s %q também é gerenciado por: %s. Se for uma ferramenta de deploy (pipeline de CI/CD, Argo CD, Flux, Helm), o próximo deploy dela pode desfazer esta alteração. Para mudar de forma permanente, altere também na origem (repositório, chart ou pipeline).",
+				obj.GetKind(), obj.GetName(), strings.Join(tools, ", ")))
+		}
+	}
+	return y, warnings, nil
+}
+
+// externalManagers lists field managers that look like deploy tools, i.e.
+// not Kubernetes' own controllers, kubectl, or Leme itself.
+func externalManagers(obj *unstructured.Unstructured) []string {
+	internal := []string{"kube-controller-manager", "kube-scheduler", "kubelet", "kube-apiserver", "kubectl", FieldManager}
+	seen := map[string]bool{}
+	var out []string
+	for _, mf := range obj.GetManagedFields() {
+		m := mf.Manager
+		if m == "" || seen[m] || mf.Subresource == "status" {
+			continue
+		}
+		seen[m] = true
+		isInternal := false
+		for _, p := range internal {
+			if strings.HasPrefix(m, p) {
+				isInternal = true
+				break
+			}
+		}
+		if !isInternal {
+			out = append(out, m)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// friendly turns the API errors users hit while editing into plain language.
+func friendly(err error) error {
+	switch {
+	case apierrors.IsConflict(err):
+		return fmt.Errorf("o objeto foi alterado no cluster depois que você abriu o editor. Clique em Recarregar para ver a versão atual e refaça a alteração (assim nada de outra pessoa é sobrescrito)")
+	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
+		return fmt.Errorf("o cluster recusou o YAML: %w", err)
+	case apierrors.IsForbidden(err):
+		return fmt.Errorf("sem permissão para alterar este objeto: %w", err)
+	}
+	return err
 }
 
 func Delete(ctx context.Context, s *cluster.Session, ref Ref, ns, name string, force bool) error {

@@ -40,10 +40,10 @@ func (a *ResourceAPI) GetYAML(cluster string, ref resources.Ref, namespace, name
 }
 
 // Apply with opts.DryRun=true is what the editor's "Diff" button calls.
-func (a *ResourceAPI) Apply(cluster, yaml string, opts resources.ApplyOptions) (string, error) {
+func (a *ResourceAPI) Apply(cluster, yaml string, opts resources.ApplyOptions) (resources.ApplyResult, error) {
 	s, err := a.d.session(cluster)
 	if err != nil {
-		return "", err
+		return resources.ApplyResult{}, err
 	}
 	ctx, cancel := reqCtx(s)
 	defer cancel()

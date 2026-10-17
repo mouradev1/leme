@@ -1,6 +1,6 @@
 // Package resources is generic over every Kubernetes kind, built-in or CRD.
 // Nothing here has per-kind Go types: the API server's discovery, Table
-// printing and server-side apply do the kind-specific work.
+// printing and server-side validation do the kind-specific work.
 package resources
 
 import (

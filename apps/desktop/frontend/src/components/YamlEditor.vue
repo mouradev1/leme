@@ -5,9 +5,10 @@
  *  Diff  -> Apply(dryRun) returns the object exactly as the API server would
  *           persist it (defaults, webhooks, strict field validation) and shows
  *           it against the live version in Monaco's DiffEditor.
- *  Apply -> server-side apply. resourceVersion in the buffer acts as an
- *           optimistic lock: a stale buffer fails with Conflict, never
- *           silently overwrites. "Force" takes field ownership (kubectl/helm).
+ *  Apply -> edit semantics (like `kubectl edit`): what's in the editor is
+ *           what gets saved, including removed fields. resourceVersion in the
+ *           buffer is an optimistic lock: a stale buffer fails, never silently
+ *           overwrites. Warns when a deploy tool also manages the object.
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api'
@@ -38,8 +39,7 @@ function requestClose() {
   if (dirty.value) confirmClose.value = true
   else emit('close')
 }
-const force = ref(false)
-const message = ref<{ kind: 'ok' | 'err'; text: string } | null>(null)
+const message = ref<{ kind: 'ok' | 'err' | 'warn'; text: string } | null>(null)
 
 let monaco: MonacoApi
 const editor = shallowRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -122,7 +122,7 @@ async function showDiff() {
   busy.value = true
   message.value = null
   try {
-    const result = await Apply(props.cluster, model.getValue(), { dryRun: true, force: force.value })
+    const { yaml: result, warnings } = await Apply(props.cluster, model.getValue(), { dryRun: true })
     disposeViews()
     mode.value = 'diff'
     const d = monaco.editor.createDiffEditor(host.value!, {
@@ -133,7 +133,9 @@ async function showDiff() {
       modified: monaco.editor.createModel(result, 'yaml'),
     })
     diff.value = d
-    message.value = { kind: 'ok', text: 'Dry-run OK: à direita está exatamente o que o servidor gravaria.' }
+    message.value = warnings?.length
+      ? { kind: 'warn', text: `Dry-run OK: à direita está exatamente o que o servidor gravaria.\n${warnings.join('\n')}` }
+      : { kind: 'ok', text: 'Dry-run OK: à direita está exatamente o que o servidor gravaria.' }
   } catch (e) {
     message.value = { kind: 'err', text: errMsg(e) }
   } finally {
@@ -145,11 +147,13 @@ async function apply() {
   busy.value = true
   message.value = null
   try {
-    const result = await Apply(props.cluster, model.getValue(), { dryRun: false, force: force.value })
+    const { yaml: result, warnings } = await Apply(props.cluster, model.getValue(), { dryRun: false })
     live = result
     model.setValue(result) // fresh resourceVersion for the next save
     if (mode.value === 'diff') showEditor()
-    message.value = { kind: 'ok', text: 'Aplicado.' }
+    message.value = warnings?.length
+      ? { kind: 'warn', text: `Aplicado.\n${warnings.join('\n')}` }
+      : { kind: 'ok', text: 'Aplicado.' }
     emit('applied', result)
   } catch (e) {
     message.value = { kind: 'err', text: errMsg(e) }
@@ -213,9 +217,6 @@ onBeforeUnmount(() => {
         <button class="seg" :class="mode === 'diff' && 'seg-on'" :disabled="busy" title="Comparar com o que o servidor gravaria (dry-run)" @click="mode !== 'diff' && showDiff()">Diff</button>
       </div>
 
-      <label class="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 pl-3 text-zinc-400" title="Assumir campos gerenciados por outra ferramenta (kubectl, helm) em caso de conflito">
-        <input v-model="force" type="checkbox" class="accent-sky-500" /> forçar
-      </label>
     </div>
 
     <!-- Unsaved-changes guard -->
@@ -227,7 +228,7 @@ onBeforeUnmount(() => {
     <div
       v-if="message"
       class="whitespace-pre-wrap px-3 py-1.5 text-xs"
-      :class="message.kind === 'err' ? 'bg-rose-950 text-rose-300' : 'bg-emerald-950 text-emerald-300'"
+      :class="message.kind === 'err' ? 'bg-rose-950 text-rose-300' : message.kind === 'warn' ? 'bg-amber-950/60 text-amber-200' : 'bg-emerald-950 text-emerald-300'"
     >{{ message.text }}</div>
     <div ref="host" class="min-h-0 flex-1" />
   </div>
