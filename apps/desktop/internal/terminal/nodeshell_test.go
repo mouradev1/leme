@@ -50,9 +50,9 @@ func TestWaitRunningReportsImagePullErrors(t *testing.T) {
 
 type fakeSession struct{ closed atomic.Bool }
 
-func (f *fakeSession) Write([]byte) error           { return nil }
+func (f *fakeSession) Write([]byte) error          { return nil }
 func (f *fakeSession) Resize(uint16, uint16) error { return nil }
-func (f *fakeSession) Close() error                 { f.closed.Store(true); return nil }
+func (f *fakeSession) Close() error                { f.closed.Store(true); return nil }
 
 type nopBus struct{}
 

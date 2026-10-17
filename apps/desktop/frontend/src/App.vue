@@ -11,6 +11,9 @@ import HelmReleases from '@/components/HelmReleases.vue'
 import YamlEditor from '@/components/YamlEditor.vue'
 import Dock from '@/components/Dock.vue'
 import KubeconfigManager from '@/components/KubeconfigManager.vue'
+import UpdateDialog from '@/components/UpdateDialog.vue'
+import { CheckUpdate } from '../wailsjs/go/api/AppAPI'
+import type { update } from '../wailsjs/go/models'
 import Icon from '@/components/Icon.vue'
 import { useClusters } from '@/stores/clusters'
 import { usePanelWidth } from '@/lib/resize'
@@ -20,7 +23,29 @@ import type { DockTab, NavigateTarget, NewDockTab, Row, RowAction, View } from '
 
 const store = useClusters()
 const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs(store)
-onMounted(() => store.load())
+onMounted(() => {
+  store.load()
+  // New-version notice: one anonymous request to GitHub's releases endpoint,
+  // a few seconds after startup; off when the user disabled it or on dev builds.
+  setTimeout(() => {
+    CheckUpdate(true)
+      .then((i) => { if (i.available) { updateInfo.value = i; showUpdate.value = true } })
+      .catch(() => { /* offline or rate-limited: stay quiet */ })
+  }, 4000)
+})
+
+const updateInfo = shallowRef<update.Info | null>(null)
+const showUpdate = ref(false)
+async function checkUpdateNow() {
+  try {
+    const i = await CheckUpdate(false)
+    updateInfo.value = i
+    if (i.available) showUpdate.value = true
+    else flash(i.latest ? `Você está na versão mais recente (v${i.latest}).` : 'Nenhuma versão publicada ainda.')
+  } catch (e) {
+    flash(`Não foi possível verificar atualizações: ${errMsg(e)}`)
+  }
+}
 
 const view = shallowRef<View | null>(null)
 const search = ref('')
@@ -193,7 +218,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
 <template>
   <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
     <div class="flex min-h-0 flex-1">
-      <Sidebar v-model:view="view" @add-kubeconfig="showKubeconfigs = true" @open-cluster="openCluster" />
+      <Sidebar v-model:view="view" @add-kubeconfig="showKubeconfigs = true" @open-cluster="openCluster" :update-available="!!updateInfo?.available" @check-update="checkUpdateNow" />
 
       <main class="flex min-w-0 flex-1 flex-col">
         <div v-show="!dockMax" class="flex min-h-0 flex-1">
@@ -269,6 +294,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
       <span v-else>desconectado</span>
     </footer>
 
+    <UpdateDialog v-if="showUpdate && updateInfo" :info="updateInfo" @close="showUpdate = false" />
     <KubeconfigManager v-if="showKubeconfigs" @close="showKubeconfigs = false" @changed="store.load()" @connect="openCluster" />
 
     <!-- Dialog -->

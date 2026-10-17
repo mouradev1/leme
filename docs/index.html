@@ -307,7 +307,7 @@
     <div class="wrap">
       <div class="stats">
         <div class="stat"><b>~170 MB</b><span>de memória em uso típico, medido no macOS com um cluster aberto</span></div>
-        <div class="stat"><b>0</b><span>telemetria, contas ou serviços externos: o app só fala com os seus clusters</span></div>
+        <div class="stat"><b>0</b><span>telemetria ou contas: o app fala com os seus clusters e só consulta o GitHub para avisar de versão nova (dá para desligar)</span></div>
         <div class="stat"><b>3</b><span>sistemas: Windows, macOS e Linux, com builds automáticos a cada versão</span></div>
       </div>
     </div>
@@ -423,6 +423,7 @@
       </div>
       <ul class="check">
         <li><b>Sem telemetria.</b> Nenhum dado de uso, nenhuma conta, nenhum servidor intermediário.</li>
+        <li><b>Aviso de versão nova opcional.</b> Ao abrir, o Leme consulta a página pública de versões no GitHub, sem enviar nada sobre você ou seus clusters. Dá para desligar, e ele nunca baixa nada sozinho.</li>
         <li><b>Credenciais locais.</b> Usa o seu kubeconfig; configs coladas ficam numa pasta privada (0700) e somem quando você remove.</li>
         <li><b>Interface isolada.</b> Content-Security-Policy impede a interface de carregar código ou enviar dados para fora.</li>
         <li><b>TLS sempre verificado</b> e dependências checadas a cada build (govulncheck, npm audit, assinaturas do registro).</li>

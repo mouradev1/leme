@@ -33,6 +33,7 @@ type App struct {
 	Stream   *StreamAPI
 	Terminal *TerminalAPI
 	Helm     *HelmAPI
+	AppInfo  *AppAPI
 }
 
 func New(d *Deps) *App {
@@ -43,6 +44,7 @@ func New(d *Deps) *App {
 		Stream:   &StreamAPI{d},
 		Terminal: &TerminalAPI{d},
 		Helm:     &HelmAPI{d},
+		AppInfo:  &AppAPI{d},
 	}
 }
 
@@ -80,7 +82,7 @@ func (a *App) Shutdown(context.Context) {
 }
 
 func (a *App) Bindings() []any {
-	return []any{a.Cluster, a.Resource, a.Stream, a.Terminal, a.Helm}
+	return []any{a.Cluster, a.Resource, a.Stream, a.Terminal, a.Helm, a.AppInfo}
 }
 
 // session resolves (and lazily connects) a cluster with a bounded wait.

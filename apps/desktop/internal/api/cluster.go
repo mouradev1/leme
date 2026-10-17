@@ -97,8 +97,11 @@ func (a *ClusterAPI) RemoveKubeconfig(path string) error {
 	return a.persist()
 }
 
+// persist updates only the kubeconfig list, keeping every other preference.
 func (a *ClusterAPI) persist() error {
-	return settings.Save(settings.Settings{KubeconfigPaths: a.d.Clusters.ExtraPaths()})
+	s := settings.Load()
+	s.KubeconfigPaths = a.d.Clusters.ExtraPaths()
+	return settings.Save(s)
 }
 
 // Namespaces falls back to the context's namespace when the user lacks

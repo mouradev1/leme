@@ -36,6 +36,20 @@ export namespace api {
 	        this.initContainers = source["initContainers"];
 	    }
 	}
+	export class Prefs {
+	    updateCheck: boolean;
+	    skippedVersion: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Prefs(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.updateCheck = source["updateCheck"];
+	        this.skippedVersion = source["skippedVersion"];
+	    }
+	}
 	export class ServerInfo {
 	    context: string;
 	    version: string;
@@ -710,6 +724,33 @@ export namespace terminal {
 	        this.pod = source["pod"];
 	        this.container = source["container"];
 	        this.command = source["command"];
+	    }
+	}
+
+}
+
+export namespace update {
+	
+	export class Info {
+	    current: string;
+	    latest: string;
+	    available: boolean;
+	    url: string;
+	    notes: string;
+	    published: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.current = source["current"];
+	        this.latest = source["latest"];
+	        this.available = source["available"];
+	        this.url = source["url"];
+	        this.notes = source["notes"];
+	        this.published = source["published"];
 	    }
 	}
 

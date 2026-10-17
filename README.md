@@ -49,6 +49,9 @@ The UI is in Brazilian Portuguese.
   required.
 - **Quick actions**: scale, rollout restart, cordon/drain, ConfigMap and Secret
   editing in place.
+- **Update notice**: tells you when a new release is out (one anonymous request
+  to GitHub's releases endpoint at startup; can be turned off). Never downloads
+  anything by itself.
 
 ## Download
 

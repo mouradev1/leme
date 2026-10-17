@@ -8,7 +8,8 @@ WAILS=${WAILS:-$(go env GOPATH)/bin/wails}
 VERSION=$(python3 -c 'import json;print(json.load(open("wails.json"))["info"]["productVersion"])')
 DMG="dist/mac/Leme-${VERSION}-macos-universal.dmg"
 
-"$WAILS" build -clean -trimpath -platform darwin/universal -ldflags "-s -w -X main.version=${VERSION}"
+# Local builds report "<version>-dev": no update notice on startup (CI releases use the tag).
+"$WAILS" build -clean -trimpath -platform darwin/universal -ldflags "-s -w -X main.version=${VERSION}-dev"
 
 mkdir -p dist/mac
 STAGE=$(mktemp -d)

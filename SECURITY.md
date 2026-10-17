@@ -14,8 +14,15 @@ version with a note in the release changelog.
 
 ## What Leme does with your data
 
-- **No telemetry.** Leme does not collect usage data, has no accounts and
-  talks to no server other than the Kubernetes API servers you open.
+- **No telemetry.** Leme does not collect usage data and has no accounts. It
+  talks only to the Kubernetes API servers you open, plus one optional request:
+- **Update notice.** A few seconds after startup Leme asks GitHub's public
+  releases endpoint (`api.github.com/repos/mouradev1/leme/releases/latest`)
+  whether a newer version exists. It sends no data about you, your clusters or
+  your usage (User-Agent is just `Leme`); GitHub only sees your IP, as with any
+  page visit. Turn it off in the update dialog (*Avisar sobre novas versões*).
+  It never downloads or installs anything by itself: *Baixar* opens the
+  release page in your browser.
 - **Credentials stay on your machine.** Clusters come from your kubeconfig.
   Configs pasted into the app are stored in a private per-user folder
   (directory `0700`, files `0600`) and deleted when removed in the app.

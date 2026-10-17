@@ -11,7 +11,8 @@ import { themePref, type ThemePref } from '@/lib/theme'
 import Icon from './Icon.vue'
 
 const view = defineModel<View | null>('view', { required: true })
-const emit = defineEmits<{ addKubeconfig: []; openCluster: [name: string] }>()
+defineProps<{ updateAvailable?: boolean }>()
+const emit = defineEmits<{ addKubeconfig: []; openCluster: [name: string]; checkUpdate: [] }>()
 
 const store = useClusters()
 const { contexts, active, sections, connecting, error, catalog } = storeToRefs(store)
@@ -271,7 +272,10 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
 
     <!-- Theme -->
     <div class="flex items-center gap-2 border-t border-zinc-800/80 px-3 py-2">
-      <span class="text-[11px] text-zinc-500" :title="`Leme ${version}`">Leme <span class="font-mono">{{ version === 'dev' ? 'dev' : `v${version}` }}</span></span>
+      <button class="text-left text-[11px] text-zinc-500 hover:text-zinc-200" title="Verificar atualizações" @click="emit('checkUpdate')">
+        Leme <span class="font-mono">{{ version === 'dev' ? 'dev' : `v${version}` }}</span>
+        <span v-if="updateAvailable" class="ml-1 rounded-full bg-sky-500/15 px-1.5 text-sky-300">nova versão</span>
+      </button>
       <div class="ml-auto flex rounded-md border border-zinc-800 p-0.5">
         <button
           v-for="t in THEMES" :key="t.value" :title="t.label"

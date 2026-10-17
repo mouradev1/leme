@@ -12,6 +12,9 @@ import (
 
 type Settings struct {
 	KubeconfigPaths []string `json:"kubeconfigPaths"`
+	// Update notice: on by default; the user can turn it off or skip a version.
+	UpdateCheckDisabled bool   `json:"updateCheckDisabled,omitempty"`
+	SkippedVersion      string `json:"skippedVersion,omitempty"`
 }
 
 func file() (string, error) {
