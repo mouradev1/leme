@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Defense in depth: the UI may only load code/assets from the app itself and
+      may not open connections anywhere (cluster traffic goes through Go, never
+      the webview). Even a compromised dependency can't exfiltrate data or pull
+      remote scripts. wails: = macOS/Linux origin, http://wails.localhost =
+      Windows origin, ws://localhost:* = Vite HMR in `wails dev` only.
+      'unsafe-inline' is for styles only (Vue :style bindings, Monaco/xterm CSS).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' wails: http://wails.localhost;
+               script-src 'self' wails: http://wails.localhost;
+               style-src 'self' wails: http://wails.localhost 'unsafe-inline';
+               img-src 'self' wails: http://wails.localhost data: blob:;
+               font-src 'self' wails: http://wails.localhost data:;
+               connect-src 'self' wails: http://wails.localhost ws://localhost:*;
+               worker-src 'self' wails: http://wails.localhost blob:;
+               object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Leme</title>
+  </head>
+  <body class="bg-zinc-950 text-zinc-200 antialiased">
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
