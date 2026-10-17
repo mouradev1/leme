@@ -8,7 +8,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import type { resources } from '../../wailsjs/go/models'
 import { useResourceWatch } from '@/composables/useResourceWatch'
 import type { Column, NavigateTarget, Row, RowAction } from '@/lib/types'
-import { actionLabel, actionsFor, isKind } from '@/lib/actions'
+import { actionIcon, actionLabel, actionsFor, dangerous, isKind } from '@/lib/actions'
 import { age, bytes, cell, cpu } from '@/lib/format'
 import { STATUS_COLUMNS, statusTone, toneClass } from '@/lib/status'
 import type { Usage } from '@/composables/useMetrics'
@@ -26,9 +26,13 @@ const props = defineProps<{
   columns: Column[]
   usage?: Usage
   gone?: boolean // object was deleted while the panel was open
+  back?: string // opened from another object (e.g. a pod's node): label to go back to it
+  peek?: boolean // opened from a link, not from this kind's own list
 }>()
 const emit = defineEmits<{
   close: []
+  back: []
+  open: [] // show this object's kind in the main list
   action: [RowAction, Row]
   navigate: [NavigateTarget]
   container: [action: 'logs' | 'previous' | 'shell', container: string, row: Row]
@@ -83,6 +87,8 @@ const events = computed(() => {
 // Edit/Delete live as header icons; the rest as buttons.
 // Logs/Shell/Edit/Delete live as header icons; the rest as buttons below.
 const HEADER_ACTIONS = ['copy', 'edit', 'delete', 'logs', 'shell']
+// Everything else (node shell, cordon, drain, scale, restart) also lives in the
+// header as icons, after Logs/Shell.
 const quick = computed(() => actionsFor(props.kind, props.row).filter((a) => !HEADER_ACTIONS.includes(a)))
 const hasAction = (a: RowAction) => actionsFor(props.kind, props.row).includes(a)
 
@@ -134,6 +140,7 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
     />
     <!-- Header -->
     <header class="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-800 px-4">
+      <button v-if="back" class="icon-btn -ml-2" :title="`Voltar para ${back}`" @click="emit('back')"><Icon name="back" :size="15" /></button>
       <h2 class="min-w-0 flex-1 truncate text-[13px] text-zinc-100" :title="row.name">
         <span class="font-semibold">{{ kind.kind }}:</span> {{ row.name }}
       </h2>
@@ -174,6 +181,12 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
           <p v-if="!runningContainers.length" class="px-3 py-2 text-zinc-500">Nenhum container em execução.</p>
         </div>
       </div>
+      <button
+        v-for="a in quick" :key="a" class="icon-btn" :class="dangerous.has(a) && 'hover:!text-rose-300'"
+        :title="actionLabel[a]" @click="emit('action', a, row)"
+      ><Icon :name="actionIcon[a] ?? 'chevron'" :size="15" /></button>
+      <span v-if="quick.length" class="mx-0.5 h-4 w-px bg-zinc-800" />
+      <button v-if="peek" class="icon-btn" :title="`Abrir ${kind.kind} na lista`" @click="emit('open')"><Icon name="list" :size="15" /></button>
       <button class="icon-btn" title="Editar YAML" @click="emit('action', 'edit', row)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11.2 1.8a1.5 1.5 0 0 1 2.1 0l.9.9a1.5 1.5 0 0 1 0 2.1L5.5 13.5 2 14l.5-3.5z" /></svg>
       </button>
@@ -184,14 +197,6 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
     </header>
 
     <div class="min-h-0 flex-1 overflow-auto">
-      <div v-if="quick.length" class="flex flex-wrap gap-1.5 border-b border-zinc-800/70 px-4 py-3">
-        <button
-          v-for="a in quick" :key="a"
-          class="rounded-md border px-2 py-1 text-xs"
-          :class="a === 'drain' ? 'border-rose-900 text-rose-300 hover:bg-rose-950' : 'border-zinc-800 text-zinc-200 hover:bg-zinc-800'"
-          @click="emit('action', a, row)"
-        >{{ actionLabel[a] }}</button>
-      </div>
 
       <div v-if="pod?.details.value?.diagnoses?.length" class="border-b border-zinc-800/70 px-4 py-3">
         <PodDiagnoses :items="pod.details.value.diagnoses" @previous-logs="emit('container', 'previous', $event, row)" />

@@ -49,6 +49,12 @@ export const useClusters = defineStore('clusters', () => {
     }
   }
 
+  /** Resolve a Kind name (e.g. "Node", "ReplicaSet"); built-ins win over CRDs with the same name. */
+  function findKind(kindName: string): resources.Kind | undefined {
+    const matches = catalog.value.filter((k) => k.kind === kindName)
+    return matches.find((k) => k.category !== 'Custom Resources') ?? matches[0]
+  }
+
   async function refreshCatalog() {
     if (active.value) catalog.value = await RefreshCatalog(active.value)
   }
@@ -70,7 +76,7 @@ export const useClusters = defineStore('clusters', () => {
 
   return {
     contexts, active, server, catalog, namespaces, selectedNamespaces, connecting, error, sections,
-    load, activate, refreshCatalog,
+    load, activate, refreshCatalog, findKind,
   }
 })
 

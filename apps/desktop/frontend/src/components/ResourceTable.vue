@@ -26,10 +26,11 @@ import NamespaceSelect from './NamespaceSelect.vue'
 import SearchBox from './SearchBox.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import DetailsDrawer from './DetailsDrawer.vue'
+import PeekDrawer from './PeekDrawer.vue'
 
 const props = defineProps<{ cluster: string; kind: resources.Kind }>()
 const emit = defineEmits<{
-  action: [action: RowAction, row: Row]
+  action: [action: RowAction, row: Row, kind: resources.Kind]
   bulkDelete: [rows: Row[]]
   navigate: [target: NavigateTarget]
   create: []
@@ -125,7 +126,7 @@ function serverCol(c: Column, i: number): ColumnDef<Row, unknown> {
   }
   if (isPods.value && c.name === 'Node') {
     return { id, header: c.name, accessorFn, sortingFn: smartSort,
-      cell: ({ getValue }) => { const v = fmt(getValue()); return v && v !== '<none>' ? link(v, () => emit('navigate', { kind: 'Node', search: v })) : '' } }
+      cell: ({ getValue }) => { const v = fmt(getValue()); return v && v !== '<none>' ? link(v, () => openPeek({ kind: 'Node', search: v }), `Ver detalhes do node ${v}`) : '' } }
   }
   return { id, header: c.name, accessorFn, sortingFn: smartSort, cell: ({ getValue }) => fmt(getValue()) }
 }
@@ -159,7 +160,7 @@ const columnDefs = computed<ColumnDef<Row, unknown>[]>(() => {
     d.push({ id: 'owner', header: 'Controlled By', accessorFn: (r) => (r.owner ? `${r.owner.kind}/${r.owner.name}` : ''),
       cell: ({ row }) => {
         const o = row.original.owner
-        return o ? link(o.kind, () => emit('navigate', { kind: o.kind, search: o.name, namespace: row.original.namespace }), `${o.kind}/${o.name}`) : ''
+        return o ? link(o.kind, () => openPeek({ kind: o.kind, search: o.name, namespace: row.original.namespace }), `Ver detalhes de ${o.kind}/${o.name}`) : ''
       } })
   }
   d.push(
@@ -245,7 +246,24 @@ const liveSelected = computed(() => (selectedUid.value ? rows.value.find((r) => 
 watch(liveSelected, (r) => r && (snapshot.value = r))
 const detailsRow = computed(() => liveSelected.value ?? (selectedUid.value ? snapshot.value : null))
 
+// Peek: details of a linked object (a pod's node, its owner, a volume's
+// ConfigMap...) shown in the side panel without leaving this list.
+const peek = ref<{ kind: resources.Kind; name: string; namespace?: string } | null>(null)
+function openPeek(t: NavigateTarget) {
+  const k = store.findKind(t.kind)
+  if (!k || !t.search) return emit('navigate', t) // unknown kind: fall back to the list view
+  peek.value = { kind: k, name: t.search, namespace: t.namespace }
+}
+function openPeekInList() {
+  const p = peek.value
+  if (!p) return
+  peek.value = null
+  selectedUid.value = ''
+  emit('navigate', { kind: p.kind.kind, search: p.name, namespace: p.namespace })
+}
+
 function select(r: Row) {
+  peek.value = null
   selectedUid.value = selectedUid.value === r.uid ? '' : r.uid
   snapshot.value = r
 }
@@ -264,8 +282,8 @@ const menuItems = computed<MenuItem<RowAction>[]>(() => {
 function onAction(a: RowAction, row: Row) {
   if (a === 'details') return select(row)
   if (a === 'copy') return void ClipboardSetText(row.name)
-  if (a === 'edit') selectedUid.value = '' // editor takes the side panel
-  emit('action', a, row)
+  if (a === 'edit') { selectedUid.value = ''; peek.value = null } // editor takes the side panel
+  emit('action', a, row, props.kind)
 }
 
 function bulkDelete() {
@@ -275,7 +293,9 @@ function bulkDelete() {
 
 function onKey(e: KeyboardEvent) {
   const typing = (e.target as HTMLElement)?.closest('input,textarea,.monaco-editor,.xterm')
-  if (e.key === 'Escape' && !typing && !menu.value && !colMenu.value) selectedUid.value = ''
+  if (e.key !== 'Escape' || typing || menu.value || colMenu.value) return
+  if (peek.value) peek.value = null
+  else selectedUid.value = ''
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
@@ -360,16 +380,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </div>
     </div>
 
+    <PeekDrawer
+      v-if="peek" :key="`${peek.kind.resource}/${peek.namespace}/${peek.name}`"
+      :cluster="cluster" :kind="peek.kind" :name="peek.name" :namespace="peek.namespace"
+      :back="detailsRow?.name"
+      @close="peek = null; selectedUid = ''" @back="peek = null" @open="openPeekInList"
+      @action="(a, r, k) => { if (a === 'edit') peek = null; emit('action', a, r, k) }"
+      @navigate="openPeek" @container="(a, c, r) => emit('container', a, c, r)"
+    />
     <DetailsDrawer
-      v-if="detailsRow" :key="detailsRow.uid"
+      v-else-if="detailsRow" :key="detailsRow.uid"
       :cluster="cluster" :kind="kind" :row="detailsRow" :columns="columns" :usage="usageOf(detailsRow)"
       :gone="!liveSelected"
-      @close="selectedUid = ''" @action="onAction" @navigate="emit('navigate', $event)"
+      @close="selectedUid = ''" @action="onAction" @navigate="openPeek"
       @container="(a, c, r) => emit('container', a, c, r)"
     />
 
     <button
-      v-if="kind.verbs.includes('create') && !detailsRow"
+      v-if="kind.verbs.includes('create') && !detailsRow && !peek"
       class="absolute right-6 bottom-6 z-20 grid h-11 w-11 place-items-center rounded-full bg-sky-500 text-2xl leading-none text-white shadow-lg shadow-sky-900/50 transition hover:scale-105 hover:bg-sky-400"
       :title="`Criar ${kind.kind}`" @click="emit('create')"
     >+</button>

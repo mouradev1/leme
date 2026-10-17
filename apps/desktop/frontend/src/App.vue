@@ -19,7 +19,7 @@ import { hue, initials } from '@/lib/dom'
 import type { DockTab, NavigateTarget, Row, RowAction, View } from '@/lib/types'
 
 const store = useClusters()
-const { contexts, active, server, catalog, selectedNamespaces, connecting } = storeToRefs(store)
+const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs(store)
 onMounted(() => store.load())
 
 const view = shallowRef<View | null>(null)
@@ -50,10 +50,7 @@ watch(view, () => {
 })
 
 function navigate(t: NavigateTarget) {
-  // Prefer built-ins over CRDs that reuse a Kind name.
-  const k = [...catalog.value]
-    .sort((a, b) => Number(a.category === 'Custom Resources') - Number(b.category === 'Custom Resources'))
-    .find((k) => k.kind === t.kind)
+  const k = store.findKind(t.kind)
   if (!k) return flash(`Tipo ${t.kind} não encontrado neste cluster`)
   keepSearch = true
   view.value = { type: 'resource', kind: k }
@@ -95,8 +92,9 @@ async function confirmDialog() {
 }
 const confirm = (title: string, run: () => Promise<void>, danger = false) => (dialog.value = { title, run, danger })
 
-async function onAction(action: RowAction, row: Row) {
-  const k = currentKind.value!
+// kind: the object's own kind (a node opened from the pod list is a Node).
+async function onAction(action: RowAction, row: Row, kind?: resources.Kind) {
+  const k = kind ?? currentKind.value!
   const c = active.value
   const ns = row.namespace ?? ''
   switch (action) {
@@ -114,6 +112,13 @@ async function onAction(action: RowAction, row: Row) {
       }
       break
     }
+    case 'nodeshell':
+      confirm(
+        `Abrir um shell root no node ${row.name}? O Leme cria um pod privilegiado temporário em kube-system nesse node (acesso total à máquina) e o remove ao fechar o terminal.`,
+        async () => openTab({ id: newId(), type: 'shell', title: `node ${row.name}`, node: row.name }),
+        true,
+      )
+      break
     case 'delete':
       confirm(`Excluir ${k.kind} ${row.name}?`, async () => { await Delete(c, k, ns, row.name, false); flash(`${row.name} excluído`) }, true)
       break

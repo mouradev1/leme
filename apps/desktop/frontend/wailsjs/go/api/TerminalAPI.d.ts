@@ -8,6 +8,8 @@ export function OpenExec(arg1:string,arg2:string,arg3:terminal.ExecTarget,arg4:n
 
 export function OpenLocal(arg1:string,arg2:string,arg3:number,arg4:number):Promise<void>;
 
+export function OpenNodeShell(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number):Promise<void>;
+
 export function Resize(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function Write(arg1:string,arg2:string):Promise<void>;

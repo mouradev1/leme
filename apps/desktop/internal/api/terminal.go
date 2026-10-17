@@ -25,6 +25,24 @@ func (a *TerminalAPI) OpenExec(id, cluster string, target terminal.ExecTarget, c
 	return err
 }
 
+// OpenNodeShell opens a root shell on a node through a temporary privileged
+// pod (deleted when the shell closes). The UI asks for confirmation first.
+func (a *TerminalAPI) OpenNodeShell(id, cluster, node string, cols, rows uint16) error {
+	s, err := a.d.session(cluster)
+	if err != nil {
+		return err
+	}
+	start := terminal.NodeShell(s, node, cols, rows)
+	s.Acquire()
+	err = a.d.Terminals.Open(id, func(out func([]byte), done func(error)) (terminal.Session, error) {
+		return start(out, func(e error) { s.Release(); done(e) })
+	})
+	if err != nil {
+		s.Release()
+	}
+	return err
+}
+
 // OpenLocal opens a host shell (PTY) pre-wired to the given cluster.
 func (a *TerminalAPI) OpenLocal(id, cluster string, cols, rows uint16) error {
 	kubeconfig, err := a.d.Clusters.ScopedKubeconfig(cluster)

@@ -7,6 +7,7 @@ export const actionLabel: Record<RowAction, string> = {
   copy: 'Copiar nome',
   logs: 'Logs',
   shell: 'Shell',
+  nodeshell: 'Shell no node',
   scale: 'Escalar…',
   restart: 'Reiniciar (rollout)',
   cordon: 'Cordon',
@@ -16,6 +17,12 @@ export const actionLabel: Record<RowAction, string> = {
 }
 
 export const dangerous = new Set<RowAction>(['delete', 'drain'])
+
+/** Header icon (see icons.ts) for each quick action in the details panel. */
+export const actionIcon: Partial<Record<RowAction, string>> = {
+  logs: 'logs', shell: 'terminal', nodeshell: 'terminal',
+  scale: 'scale', restart: 'refresh', cordon: 'ban', uncordon: 'play', drain: 'drain',
+}
 
 export const isKind = (k: resources.Ref, group: string, resource: string) =>
   k.group === group && k.resource === resource
@@ -28,7 +35,7 @@ export function actionsFor(k: resources.Kind, row: Row): RowAction[] {
   if (isKind(k, 'apps', 'daemonsets')) specific.push('restart')
   if (isKind(k, '', 'nodes')) {
     const cordoned = row.cells.some((c) => String(c).includes('SchedulingDisabled'))
-    specific.push(cordoned ? 'uncordon' : 'cordon', 'drain')
+    specific.push('nodeshell', cordoned ? 'uncordon' : 'cordon', 'drain')
   }
   const generic: RowAction[] = ['edit', 'copy']
   if (k.verbs.includes('delete') && !isKind(k, '', 'nodes')) generic.push('delete')

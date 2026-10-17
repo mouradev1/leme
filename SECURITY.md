@@ -27,6 +27,12 @@ version with a note in the release changelog.
 - **TLS is always verified.** Leme never disables certificate verification.
 - **Secret values** are only fetched when you open a Secret, are hidden until
   you reveal them, and are never logged.
+- **Node shell** (root shell on a node) is opt-in and asks for confirmation.
+  It creates a temporary privileged pod (`kube-system`, labelled
+  `leme.dev/node-shell=true`, image `busybox`) pinned to that node, enters the
+  host with `nsenter`, and deletes the pod when the terminal closes. As a last
+  resort the pod expires after 8 hours. It needs RBAC permission to create
+  privileged pods in `kube-system`; clusters that forbid it simply refuse.
 
 ## Supply chain
 

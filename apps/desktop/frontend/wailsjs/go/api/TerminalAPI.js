@@ -14,6 +14,10 @@ export function OpenLocal(arg1, arg2, arg3, arg4) {
   return window['go']['api']['TerminalAPI']['OpenLocal'](arg1, arg2, arg3, arg4);
 }
 
+export function OpenNodeShell(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['TerminalAPI']['OpenNodeShell'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function Resize(arg1, arg2, arg3) {
   return window['go']['api']['TerminalAPI']['Resize'](arg1, arg2, arg3);
 }

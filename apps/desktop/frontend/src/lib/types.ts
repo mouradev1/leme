@@ -56,7 +56,7 @@ export interface MetricsSnapshot {
 }
 
 export type RowAction =
-  | 'details' | 'edit' | 'copy' | 'delete' | 'logs' | 'shell'
+  | 'details' | 'edit' | 'copy' | 'delete' | 'logs' | 'shell' | 'nodeshell'
   | 'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain'
 
 /** Jump to another resource list, e.g. clicking "Controlled By" or "Node". */
@@ -73,4 +73,4 @@ export type View =
 
 export type DockTab =
   | { id: string; type: 'logs'; title: string; namespace: string; pod: string; containers: string[]; previous?: boolean }
-  | { id: string; type: 'shell'; title: string; target?: terminal.ExecTarget }
+  | { id: string; type: 'shell'; title: string; target?: terminal.ExecTarget; node?: string }

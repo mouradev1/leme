@@ -27,10 +27,13 @@ type Manager struct {
 	bus      events.Emitter
 	mu       sync.Mutex
 	sessions map[string]Session
+	// closed: Close arrived while the session was still starting (e.g. a node
+	// shell waiting for its pod). It's closed as soon as it's ready.
+	closed map[string]bool
 }
 
 func NewManager(bus events.Emitter) *Manager {
-	return &Manager{bus: bus, sessions: map[string]Session{}}
+	return &Manager{bus: bus, sessions: map[string]Session{}, closed: map[string]bool{}}
 }
 
 // Open starts a session; the UI listens on "term:<id>:data" (base64 chunks)
@@ -71,9 +74,17 @@ func (m *Manager) Open(id string, start Starter) error {
 
 	s, err := start(out, done)
 	if err != nil {
+		m.mu.Lock()
+		delete(m.closed, id)
+		m.mu.Unlock()
 		return err
 	}
 	m.mu.Lock()
+	if m.closed[id] { // the tab was closed while we were starting
+		delete(m.closed, id)
+		m.mu.Unlock()
+		return s.Close()
+	}
 	m.sessions[id] = s
 	m.mu.Unlock()
 	return nil
@@ -108,7 +119,11 @@ func (m *Manager) Resize(id string, cols, rows uint16) error {
 func (m *Manager) Close(id string) {
 	if s, err := m.get(id); err == nil {
 		_ = s.Close()
+		return
 	}
+	m.mu.Lock()
+	m.closed[id] = true
+	m.mu.Unlock()
 }
 
 func (m *Manager) CloseAll() {

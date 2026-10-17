@@ -6,14 +6,16 @@
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Terminal } from '@xterm/xterm'
-import { Close, OpenExec, OpenLocal, Resize, Write } from '../../wailsjs/go/api/TerminalAPI'
+import { Close, OpenExec, OpenLocal, OpenNodeShell, Resize, Write } from '../../wailsjs/go/api/TerminalAPI'
 import type { terminal } from '../../wailsjs/go/models'
 import { b64ToBytes, errMsg, newId, on } from '@/lib/bridge'
 import { terminalTheme, theme } from '@/lib/theme'
 
 const props = defineProps<{
   cluster: string
-  target?: terminal.ExecTarget // omit for a local shell scoped to `cluster`
+  target?: terminal.ExecTarget // container shell
+  node?: string // root shell on a node (temporary privileged pod)
+  // neither: local shell scoped to `cluster`
 }>()
 
 const host = ref<HTMLElement | null>(null)
@@ -56,6 +58,7 @@ onMounted(async () => {
 
   try {
     if (props.target) await OpenExec(id, props.cluster, props.target, term.cols, term.rows)
+    else if (props.node) await OpenNodeShell(id, props.cluster, props.node, term.cols, term.rows)
     else await OpenLocal(id, props.cluster, term.cols, term.rows)
     term.focus()
   } catch (e) {

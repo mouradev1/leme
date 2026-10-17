@@ -34,8 +34,11 @@ The UI is in Brazilian Portuguese.
   Resources, streamed in real time. Regex search, multi-namespace filter,
   configurable columns, bulk delete.
 - **Logs and shell**: per-container live logs (including the previous, crashed
-  run), an exec shell into containers, and a local terminal scoped to the
+  run), an exec shell into containers, a root shell on nodes (temporary
+  privileged pod, removed on close), and a local terminal scoped to the
   selected cluster.
+- **Details side panel**: click a pod's node or owner to inspect it next to the
+  list, without leaving the current view.
 - **Why did it restart?**: correlates container status and events to explain
   OOMKilled, failing probes, CrashLoopBackOff, image pull errors and more.
 - **Metrics**: CPU and memory per pod, node and container, with requests and
