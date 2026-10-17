@@ -73,7 +73,7 @@ jobs:
           ln -s /Applications stage/Applications
           hdiutil create -volname Leme -srcfolder stage -fs HFS+ -size 300m -format UDZO "out/Leme-${VERSION}-macos-universal.dmg"
           ditto -c -k --keepParent build/bin/Leme.app "out/Leme-${VERSION}-macos-universal.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: apps/desktop/out/*
@@ -115,7 +115,7 @@ jobs:
           $installer = Get-ChildItem build/bin -Filter "*installer*.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer not found" }
           Copy-Item $installer.FullName "out/Leme-$env:VERSION-windows-amd64-setup.exe"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: apps/desktop/out/*
@@ -161,7 +161,7 @@ jobs:
           if [ "$ARCH" = amd64 ]; then cp THIRD_PARTY_NOTICES.txt out/; fi
           cp build/bin/leme "out/leme-${VERSION}-linux-${ARCH}"
           bash build/linux/package-deb.sh build/bin/leme "${VERSION}" "${ARCH}" out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: apps/desktop/out/*
