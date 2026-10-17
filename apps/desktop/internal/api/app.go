@@ -49,7 +49,7 @@ func New(d *Deps) *App {
 // IdleClusterTimeout: clusters with nothing open on screen for this long are
 // disconnected (connections, caches and client objects freed). Reconnecting
 // is automatic and instant on the next click.
-const IdleClusterTimeout = 10 * time.Minute
+const IdleClusterTimeout = 6 * time.Hour
 
 func (a *App) Startup(ctx context.Context) {
 	a.d.Bus.Bind(ctx)
