@@ -1,0 +1,24 @@
+# OS / editors
+.DS_Store
+*.swp
+.idea/
+
+# Desktop app build outputs
+apps/desktop/build/bin/
+apps/desktop/dist/
+apps/desktop/frontend/node_modules/
+apps/desktop/frontend/dist/*
+!apps/desktop/frontend/dist/.keep
+
+# Never commit credentials by accident
+*.kubeconfig
+kubeconfig*.yaml
+.env
+
+# Brand generation scratch
+design/out/
+design/Inter.ttf
+.venv/
+design
+# Wails install cache
+apps/desktop/frontend/package.json.md5
