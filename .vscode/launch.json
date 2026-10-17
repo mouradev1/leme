@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // F5: debug do backend Go (breakpoints em internal/...) com a UI servida pelo Vite (hot-reload).
+      "name": "leme: Debug (Go + Vite)",
+      "type": "go",
+      "request": "launch",
+      "mode": "exec",
+      "program": "${workspaceFolder}/apps/desktop/build/bin/leme-dev",
+      "cwd": "${workspaceFolder}/apps/desktop",
+      "preLaunchTask": "leme: debug prepare",
+      "env": {
+        "frontenddevserverurl": "http://localhost:5173",
+        "loglevel": "debug"
+      }
+    }
+  ]
+}

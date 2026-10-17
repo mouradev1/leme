@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Jeito mais simples: Cmd+Shift+B. Abre a janela com hot-reload de Go e Vue.
+      "label": "leme: wails dev",
+      "type": "shell",
+      "command": "${env:HOME}/go/bin/wails dev",
+      "options": { "cwd": "${workspaceFolder}/apps/desktop" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "leme: frontend dev server",
+      "type": "shell",
+      "command": "npm install --no-audit --no-fund && npx vite --port 5173 --strictPort",
+      "options": { "cwd": "${workspaceFolder}/apps/desktop/frontend" },
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "reveal": "silent" },
+      // Avisa o VS Code quando o Vite está pronto, para o debug só iniciar depois.
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activesBegin": ".", "beginsPattern": "VITE v", "endsPattern": "Local:" }
+      }
+    },
+    {
+      "label": "leme: go build (debug)",
+      "type": "shell",
+      "command": "go build -tags dev -gcflags 'all=-N -l' -o build/bin/leme-dev .",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/desktop",
+        // O CLI do Wails injeta esse framework no macOS; um go build direto precisa dele.
+        "env": { "CGO_LDFLAGS": "-framework UniformTypeIdentifiers" }
+      },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "leme: debug prepare",
+      "dependsOn": ["leme: frontend dev server", "leme: go build (debug)"],
+      "dependsOrder": "sequence"
+    },
+    {
+      "label": "leme: test",
+      "type": "shell",
+      "command": "go test -race ./... && cd frontend && npx vue-tsc --noEmit",
+      "options": { "cwd": "${workspaceFolder}/apps/desktop" },
+      "problemMatcher": ["$go"],
+      "group": "test"
+    }
+  ]
+}
