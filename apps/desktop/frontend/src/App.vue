@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Cordon, Delete, Drain, PodContainers, Restart, Scale } from '../wailsjs/go/api/ResourceAPI'
+import { Cordon, Delete, Drain, PodContainers, Restart, Scale, WorkloadPods } from '../wailsjs/go/api/ResourceAPI'
 import { Unsubscribe } from '../wailsjs/go/api/StreamAPI'
 import type { resources } from '../wailsjs/go/models'
 import Sidebar from '@/components/Sidebar.vue'
@@ -12,6 +12,9 @@ import YamlEditor from '@/components/YamlEditor.vue'
 import Dock from '@/components/Dock.vue'
 import KubeconfigManager from '@/components/KubeconfigManager.vue'
 import UpdateDialog from '@/components/UpdateDialog.vue'
+import PortForwardDialog from '@/components/PortForwardDialog.vue'
+import PortForwards from '@/components/PortForwards.vue'
+import { forwardRequest, forwards, forwardURL, openForward, trackForwards } from '@/lib/forward'
 import { CheckUpdate } from '../wailsjs/go/api/AppAPI'
 import type { update } from '../wailsjs/go/models'
 import Icon from '@/components/Icon.vue'
@@ -25,6 +28,7 @@ const store = useClusters()
 const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs(store)
 onMounted(() => {
   store.load()
+  trackForwards()
   // New-version notice: one anonymous request to GitHub's releases endpoint,
   // a few seconds after startup; off when the user disabled it or on dev builds.
   setTimeout(() => {
@@ -144,16 +148,30 @@ async function onAction(action: RowAction, row: Row, kind?: resources.Kind) {
       editing.value = { cluster: active.value, kind: k, namespace: ns, name: row.name, key: newId() }
       break
     case 'logs':
+      if (k.group === '' && k.resource === 'pods') {
+        const pc = await PodContainers(c, ns, row.name).catch((e) => (flash(errMsg(e)), null))
+        if (!pc?.containers?.length) return
+        openTab({ id: newId(), type: 'logs', title: row.name, namespace: ns, targets: pc.containers.map((ct) => ({ pod: row.name, container: ct })) })
+      } else {
+        // Workload (Deployment, StatefulSet, DaemonSet, ReplicaSet, Job): all its pods.
+        const w = await WorkloadPods(c, k, ns, row.name).catch((e) => (flash(errMsg(e)), null))
+        if (!w) return
+        if (!w.targets?.length) return flash(`${k.kind} ${row.name} não tem pods no momento`)
+        openTab({
+          id: newId(), type: 'logs', title: `${k.kind.toLowerCase()} ${row.name}`, namespace: ns, targets: w.targets,
+          note: w.total > w.targets.length ? `mostrando ${w.targets.length} de ${w.total} streams` : undefined,
+        })
+      }
+      break
     case 'shell': {
       const pc = await PodContainers(c, ns, row.name).catch((e) => (flash(errMsg(e)), null))
       if (!pc?.containers?.length) return
-      if (action === 'logs') {
-        openTab({ id: newId(), type: 'logs', title: row.name, namespace: ns, pod: row.name, containers: pc.containers })
-      } else {
-        openTab({ id: newId(), type: 'shell', title: row.name, target: { namespace: ns, pod: row.name, container: pc.containers[0], command: [] } })
-      }
+      openTab({ id: newId(), type: 'shell', title: row.name, target: { namespace: ns, pod: row.name, container: pc.containers[0], command: [] } })
       break
     }
+    case 'portforward':
+      openForward({ cluster: c, kind: k.resource === 'services' ? 'service' : 'pod', namespace: ns, name: row.name })
+      break
     case 'nodeshell':
       confirm(
         `Abrir um shell root no node ${row.name}? O Leme cria um pod privilegiado temporário em kube-system nesse node (acesso total à máquina) e o remove ao fechar o terminal.`,
@@ -196,7 +214,7 @@ function onContainer(action: 'logs' | 'previous' | 'shell', container: string, r
   } else {
     openTab({
       id: newId(), type: 'logs', title: `${row.name}/${container}${action === 'previous' ? ' (anterior)' : ''}`,
-      namespace: ns, pod: row.name, containers: [container], previous: action === 'previous',
+      namespace: ns, targets: [{ pod: row.name, container }], previous: action === 'previous',
     })
   }
 }
@@ -226,6 +244,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
             <template v-if="active && view">
               <Overview v-if="view.type === 'overview'" :key="active" :cluster="active" @navigate="navigate" />
               <HelmReleases v-else-if="view.type === 'helm'" :key="active" :cluster="active" @confirm="confirm" @toast="flash" />
+              <PortForwards v-else-if="view.type === 'portforwards'" @toast="flash" />
               <ResourceTable
                 v-else :key="`${active}|${view.kind.group}/${view.kind.resource}`"
                 v-model:search="search" :cluster="active" :kind="view.kind"
@@ -289,11 +308,16 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
         <span class="flex items-center gap-1.5 text-zinc-300"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />{{ active }}</span>
         <span>{{ server?.version }}</span>
         <span class="truncate">{{ server?.server }}</span>
+        <button v-if="forwards.length" class="hover:text-sky-300" title="Port-forwards ativos" @click="view = { type: 'portforwards' }">{{ forwards.length }} port-forward{{ forwards.length > 1 ? 's' : '' }}</button>
         <span class="ml-auto truncate">{{ nsLabel }}</span>
       </template>
       <span v-else>desconectado</span>
     </footer>
 
+    <PortForwardDialog
+      v-if="forwardRequest" :target="forwardRequest" @close="forwardRequest = null"
+      @started="(f) => flash(`Encaminhando ${forwardURL(f)} (endereço copiado)`)"
+    />
     <UpdateDialog v-if="showUpdate && updateInfo" :info="updateInfo" @close="showUpdate = false" />
     <KubeconfigManager v-if="showKubeconfigs" @close="showKubeconfigs = false" @changed="store.load()" @connect="openCluster" />
 

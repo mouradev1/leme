@@ -7,6 +7,7 @@ import type { NavigateTarget } from '@/lib/types'
 import { bytes, cpu } from '@/lib/format'
 import MetricsChart, { type RefLine } from './MetricsChart.vue'
 import Icon from './Icon.vue'
+import { openForward } from '@/lib/forward'
 
 const props = defineProps<{ cluster: string; namespace: string; name: string; details: pods.Details }>()
 const emit = defineEmits<{
@@ -194,7 +195,13 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
           <div class="prop"><span class="prop-k">ImagePullPolicy</span><span class="prop-v">{{ c.imagePullPolicy }}</span></div>
           <div v-if="(c.ports ?? []).length" class="prop">
             <span class="prop-k">Ports</span>
-            <span class="prop-v flex flex-wrap gap-1"><span v-for="p in c.ports" :key="p.containerPort" class="chip font-mono">{{ p.name ? `${p.name}: ` : '' }}{{ p.containerPort }}/{{ p.protocol }}</span></span>
+            <span class="prop-v flex flex-wrap gap-1">
+              <button
+                v-for="p in c.ports" :key="p.containerPort" class="chip font-mono hover:bg-sky-500/20 hover:text-sky-200"
+                :title="`Port-forward da porta ${p.containerPort}`"
+                @click="openForward({ cluster, kind: 'pod', namespace, name, port: p.containerPort })"
+              >{{ p.name ? `${p.name}: ` : '' }}{{ p.containerPort }}/{{ p.protocol }} <span class="text-sky-400">→</span></button>
+            </span>
           </div>
           <div class="prop">
             <span class="prop-k">Resources</span>

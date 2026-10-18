@@ -8,6 +8,7 @@ export const actionLabel: Record<RowAction, string> = {
   logs: 'Logs',
   shell: 'Shell',
   nodeshell: 'Shell no node',
+  portforward: 'Port-forward…',
   scale: 'Escalar…',
   restart: 'Reiniciar (rollout)',
   cordon: 'Cordon',
@@ -20,7 +21,7 @@ export const dangerous = new Set<RowAction>(['delete', 'drain'])
 
 /** Header icon (see icons.ts) for each quick action in the details panel. */
 export const actionIcon: Partial<Record<RowAction, string>> = {
-  logs: 'logs', shell: 'terminal', nodeshell: 'terminal',
+  logs: 'logs', shell: 'terminal', nodeshell: 'terminal', portforward: 'forward',
   scale: 'scale', restart: 'refresh', cordon: 'ban', uncordon: 'play', drain: 'drain',
 }
 
@@ -30,9 +31,11 @@ export const isKind = (k: resources.Ref, group: string, resource: string) =>
 /** Kind-specific quick actions (the generic ones are always appended). */
 export function actionsFor(k: resources.Kind, row: Row): RowAction[] {
   const specific: RowAction[] = []
-  if (isKind(k, '', 'pods')) specific.push('logs', 'shell')
-  if (isKind(k, 'apps', 'deployments') || isKind(k, 'apps', 'statefulsets')) specific.push('scale', 'restart')
-  if (isKind(k, 'apps', 'daemonsets')) specific.push('restart')
+  if (isKind(k, '', 'pods')) specific.push('logs', 'shell', 'portforward')
+  if (isKind(k, '', 'services')) specific.push('portforward')
+  if (isKind(k, 'apps', 'deployments') || isKind(k, 'apps', 'statefulsets')) specific.push('logs', 'scale', 'restart')
+  if (isKind(k, 'apps', 'daemonsets')) specific.push('logs', 'restart')
+  if (isKind(k, 'apps', 'replicasets') || isKind(k, 'batch', 'jobs')) specific.push('logs')
   if (isKind(k, '', 'nodes')) {
     const cordoned = row.cells.some((c) => String(c).includes('SchedulingDisabled'))
     specific.push('nodeshell', cordoned ? 'uncordon' : 'cordon', 'drain')

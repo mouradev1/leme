@@ -9,6 +9,7 @@ import type { View } from '@/lib/types'
 import { hue, initials, useDismiss } from '@/lib/dom'
 import { themePref, type ThemePref } from '@/lib/theme'
 import Icon from './Icon.vue'
+import { forwards } from '@/lib/forward'
 
 const view = defineModel<View | null>('view', { required: true })
 defineProps<{ updateAvailable?: boolean }>()
@@ -259,6 +260,10 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
               <div v-if="open.has('Helm')" class="ml-[22px] border-l border-zinc-800 pl-1.5">
                 <button class="nav-sub" :class="view?.type === 'helm' && 'nav-active'" @click="view = { type: 'helm' }">Releases</button>
               </div>
+              <button class="nav-item" :class="view?.type === 'portforwards' && 'nav-active'" @click="view = { type: 'portforwards' }">
+                <Icon name="forward" /> Port Forwards
+                <span v-if="forwards.length" class="ml-auto rounded-full bg-sky-500/15 px-1.5 text-[10px] text-sky-300">{{ forwards.length }}</span>
+              </button>
             </div>
           </template>
 

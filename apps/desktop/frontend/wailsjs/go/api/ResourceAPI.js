@@ -38,6 +38,10 @@ export function PodDetails(arg1, arg2, arg3) {
   return window['go']['api']['ResourceAPI']['PodDetails'](arg1, arg2, arg3);
 }
 
+export function PodSelector(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['ResourceAPI']['PodSelector'](arg1, arg2, arg3, arg4);
+}
+
 export function RefreshCatalog(arg1) {
   return window['go']['api']['ResourceAPI']['RefreshCatalog'](arg1);
 }
@@ -52,4 +56,8 @@ export function Scale(arg1, arg2, arg3, arg4, arg5) {
 
 export function SetData(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['api']['ResourceAPI']['SetData'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function WorkloadPods(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['ResourceAPI']['WorkloadPods'](arg1, arg2, arg3, arg4);
 }

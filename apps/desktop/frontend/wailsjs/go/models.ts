@@ -68,6 +68,24 @@ export namespace api {
 	        this.defaultNamespace = source["defaultNamespace"];
 	    }
 	}
+	export class ServicePort {
+	    name: string;
+	    port: number;
+	    targetPort: string;
+	    protocol: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ServicePort(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.port = source["port"];
+	        this.targetPort = source["targetPort"];
+	        this.protocol = source["protocol"];
+	    }
+	}
 
 }
 
@@ -538,6 +556,65 @@ export namespace pods {
 
 }
 
+export namespace portforward {
+	
+	export class Forward {
+	    id: string;
+	    cluster: string;
+	    namespace: string;
+	    kind: string;
+	    name: string;
+	    pod: string;
+	    remotePort: number;
+	    podPort: number;
+	    localPort: number;
+	    state: string;
+	    error: string;
+	    started: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Forward(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.cluster = source["cluster"];
+	        this.namespace = source["namespace"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.pod = source["pod"];
+	        this.remotePort = source["remotePort"];
+	        this.podPort = source["podPort"];
+	        this.localPort = source["localPort"];
+	        this.state = source["state"];
+	        this.error = source["error"];
+	        this.started = source["started"];
+	    }
+	}
+	export class Request {
+	    namespace: string;
+	    kind: string;
+	    name: string;
+	    remotePort: number;
+	    localPort: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Request(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.namespace = source["namespace"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.remotePort = source["remotePort"];
+	        this.localPort = source["localPort"];
+	    }
+	}
+
+}
+
 export namespace resources {
 	
 	export class ApplyOptions {
@@ -608,6 +685,20 @@ export namespace resources {
 	        this.resourceVersion = source["resourceVersion"];
 	    }
 	}
+	export class PodContainer {
+	    pod: string;
+	    container: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PodContainer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pod = source["pod"];
+	        this.container = source["container"];
+	    }
+	}
 	export class Query {
 	    namespace: string;
 	    labelSelector: string;
@@ -641,6 +732,40 @@ export namespace resources {
 	        this.resource = source["resource"];
 	        this.namespaced = source["namespaced"];
 	    }
+	}
+	export class WorkloadPods {
+	    targets: PodContainer[];
+	    pods: number;
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkloadPods(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.targets = this.convertValues(source["targets"], PodContainer);
+	        this.pods = source["pods"];
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

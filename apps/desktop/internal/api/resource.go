@@ -177,3 +177,26 @@ func (a *ResourceAPI) PodDetails(cluster, namespace, name string) (pods.Details,
 	defer cancel()
 	return pods.Get(ctx, s.Kube, namespace, name)
 }
+
+// PodSelector returns the pod label selector of a workload or Service.
+func (a *ResourceAPI) PodSelector(cluster string, ref resources.Ref, namespace, name string) (string, error) {
+	s, err := a.d.session(cluster)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := reqCtx(s)
+	defer cancel()
+	return resources.SelectorOf(ctx, s, ref, namespace, name)
+}
+
+// WorkloadPods returns the pod/container log targets of a Deployment,
+// StatefulSet, DaemonSet, ReplicaSet, Job or Service (by its pod selector).
+func (a *ResourceAPI) WorkloadPods(cluster string, ref resources.Ref, namespace, name string) (resources.WorkloadPods, error) {
+	s, err := a.d.session(cluster)
+	if err != nil {
+		return resources.WorkloadPods{}, err
+	}
+	ctx, cancel := reqCtx(s)
+	defer cancel()
+	return resources.PodsOf(ctx, s, ref, namespace, name)
+}

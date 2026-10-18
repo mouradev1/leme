@@ -22,6 +22,7 @@ export const icons: Record<string, string> = {
   expand: 'M4 10l4-4 4 4',
   close: 'M4 4l8 8M12 4l-8 8',
   check: 'M3.5 8.5l3 3 6-7',
+  forward: 'M2.5 8h8.5M8 5l3 3-3 3M13.5 3.5v9',
   scale: 'M5 13V3M2.5 5.5 5 3l2.5 2.5M11 3v10M8.5 10.5 11 13l2.5-2.5',
   ban: 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 3.8l8.4 8.4',
   play: 'M5 3.5v9l7-4.5z',

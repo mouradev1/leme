@@ -20,6 +20,7 @@ import (
 	"leme/internal/platform/events"
 	"leme/internal/platform/settings"
 	"leme/internal/platform/shellenv"
+	"leme/internal/portforward"
 	"leme/internal/stream"
 	"leme/internal/terminal"
 )
@@ -76,6 +77,7 @@ func main() {
 		Clusters:  clusters,
 		Hub:       stream.NewHub(),
 		Terminals: terminal.NewManager(bus),
+		Forwards:  portforward.NewManager(bus),
 		Version:   version,
 	})
 

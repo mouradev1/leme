@@ -23,6 +23,8 @@ export function PodContainers(arg1:string,arg2:string,arg3:string):Promise<api.P
 
 export function PodDetails(arg1:string,arg2:string,arg3:string):Promise<pods.Details>;
 
+export function PodSelector(arg1:string,arg2:resources.Ref,arg3:string,arg4:string):Promise<string>;
+
 export function RefreshCatalog(arg1:string):Promise<Array<resources.Kind>>;
 
 export function Restart(arg1:string,arg2:resources.Ref,arg3:string,arg4:string):Promise<void>;
@@ -30,3 +32,5 @@ export function Restart(arg1:string,arg2:resources.Ref,arg3:string,arg4:string):
 export function Scale(arg1:string,arg2:resources.Ref,arg3:string,arg4:string,arg5:number):Promise<void>;
 
 export function SetData(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Record<string, string>,arg6:string):Promise<string>;
+
+export function WorkloadPods(arg1:string,arg2:resources.Ref,arg3:string,arg4:string):Promise<resources.WorkloadPods>;

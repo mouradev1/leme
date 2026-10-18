@@ -109,7 +109,7 @@ function toggleMax() {
     <div v-show="!collapsed" class="relative min-h-0 flex-1 border-t border-zinc-800/80">
       <!-- Each pane talks to ITS tab's cluster (t.cluster), never the active one. -->
       <div v-for="t in tabs" v-show="t.id === active && t.cluster === cluster" :key="t.id" class="absolute inset-0">
-        <LogViewer v-if="t.type === 'logs'" :cluster="t.cluster" :namespace="t.namespace" :pod="t.pod" :containers="t.containers" :previous="t.previous" />
+        <LogViewer v-if="t.type === 'logs'" :cluster="t.cluster" :namespace="t.namespace" :targets="t.targets" :previous="t.previous" :note="t.note" />
         <TerminalPane v-else :cluster="t.cluster" :target="t.target" :node="t.node" />
       </div>
     </div>

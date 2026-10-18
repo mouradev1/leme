@@ -14,6 +14,7 @@ import (
 
 	"leme/internal/cluster"
 	"leme/internal/platform/events"
+	"leme/internal/portforward"
 	"leme/internal/stream"
 	"leme/internal/terminal"
 )
@@ -23,6 +24,7 @@ type Deps struct {
 	Clusters  *cluster.Manager
 	Hub       *stream.Hub
 	Terminals *terminal.Manager
+	Forwards  *portforward.Manager
 	Version   string
 }
 
@@ -34,6 +36,7 @@ type App struct {
 	Terminal *TerminalAPI
 	Helm     *HelmAPI
 	AppInfo  *AppAPI
+	Forward  *PortForwardAPI
 }
 
 func New(d *Deps) *App {
@@ -45,6 +48,7 @@ func New(d *Deps) *App {
 		Terminal: &TerminalAPI{d},
 		Helm:     &HelmAPI{d},
 		AppInfo:  &AppAPI{d},
+		Forward:  &PortForwardAPI{d},
 	}
 }
 
@@ -77,12 +81,13 @@ func (a *App) reapIdle(ctx context.Context) {
 func (a *App) Shutdown(context.Context) {
 	a.d.Hub.StopAll()
 	a.d.Terminals.CloseAll()
+	a.d.Forwards.StopAll()
 	a.d.Clusters.Close()
 	cluster.CleanupScopedKubeconfigs() // shells may still be exiting; don't leave creds behind
 }
 
 func (a *App) Bindings() []any {
-	return []any{a.Cluster, a.Resource, a.Stream, a.Terminal, a.Helm, a.AppInfo}
+	return []any{a.Cluster, a.Resource, a.Stream, a.Terminal, a.Helm, a.AppInfo, a.Forward}
 }
 
 // session resolves (and lazily connects) a cluster with a bounded wait.
