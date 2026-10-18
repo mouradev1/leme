@@ -15,6 +15,7 @@ import type { Usage } from '@/composables/useMetrics'
 import DataSection from './DataSection.vue'
 import PodDiagnoses from './PodDiagnoses.vue'
 import PodSection from './PodSection.vue'
+import RelatedPods from './RelatedPods.vue'
 import { usePodDetails } from '@/composables/usePodDetails'
 import Icon from './Icon.vue'
 import { usePanelWidth } from '@/lib/resize'
@@ -58,15 +59,25 @@ const pod = isPod
   ? usePodDetails(computed(() => props.cluster), computed(() => props.row.namespace ?? ''), computed(() => props.row.name), computed(() => props.row.rv))
   : null
 
+// Pods behind this object: a workload's/Service's (selector) or a Node's.
+const relatedMode: 'node' | 'selector' | null =
+  isKind(props.kind, '', 'nodes') ? 'node'
+    : (['deployments', 'statefulsets', 'daemonsets', 'replicasets'].some((r) => isKind(props.kind, 'apps', r))
+      || isKind(props.kind, 'batch', 'jobs') || isKind(props.kind, '', 'services')) ? 'selector' : null
+
 const dataResource = computed(() =>
   isKind(props.kind, '', 'configmaps') ? 'configmaps' : isKind(props.kind, '', 'secrets') ? 'secrets' : null)
 
 // Events of this object, live.
 const eventsRef = ref<resources.Ref>({ group: '', version: 'v1', resource: 'events', namespaced: true })
+// Via string computeds so a row update (new object, same name) doesn't
+// restart the events watch.
+const rowName = computed(() => props.row.name)
+const rowNamespace = computed(() => (props.kind.namespaced ? (props.row.namespace ?? '') : ''))
 const eventsQuery = computed<resources.Query>(() => ({
-  namespace: props.kind.namespaced ? (props.row.namespace ?? '') : '',
+  namespace: rowNamespace.value,
   labelSelector: '',
-  fieldSelector: `involvedObject.name=${props.row.name},involvedObject.kind=${props.kind.kind}`,
+  fieldSelector: `involvedObject.name=${rowName.value},involvedObject.kind=${props.kind.kind}`,
 }))
 const ev = useResourceWatch(computed(() => props.cluster), eventsRef, eventsQuery)
 const events = computed(() => {
@@ -259,6 +270,8 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
         v-if="pod?.details.value && row.namespace" :cluster="cluster" :namespace="row.namespace" :name="row.name" :details="pod.details.value"
         @navigate="emit('navigate', $event)" @container="(a, c) => emit('container', a, c, row)"
       />
+
+      <RelatedPods v-if="relatedMode" :cluster="cluster" :kind="kind" :row="row" :mode="relatedMode" @navigate="emit('navigate', $event)" />
 
       <!-- Data (ConfigMap / Secret) -->
       <div v-if="dataResource && row.namespace" class="border-b border-zinc-800/70 px-4 py-4">
