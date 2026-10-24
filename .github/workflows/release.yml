@@ -48,12 +48,12 @@ jobs:
       run:
         working-directory: apps/desktop
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: apps/desktop/go.mod
           cache-dependency-path: apps/desktop/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -73,7 +73,7 @@ jobs:
           ln -s /Applications stage/Applications
           hdiutil create -volname Leme -srcfolder stage -fs HFS+ -size 300m -format UDZO "out/Leme-${VERSION}-macos-universal.dmg"
           ditto -c -k --keepParent build/bin/Leme.app "out/Leme-${VERSION}-macos-universal.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: apps/desktop/out/*
@@ -89,12 +89,12 @@ jobs:
         working-directory: apps/desktop
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: apps/desktop/go.mod
           cache-dependency-path: apps/desktop/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -115,7 +115,7 @@ jobs:
           $installer = Get-ChildItem build/bin -Filter "*installer*.exe" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer not found" }
           Copy-Item $installer.FullName "out/Leme-$env:VERSION-windows-amd64-setup.exe"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: apps/desktop/out/*
@@ -138,14 +138,14 @@ jobs:
       run:
         working-directory: apps/desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: System libraries (GTK3 + WebKitGTK 4.1)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: apps/desktop/go.mod
           cache-dependency-path: apps/desktop/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -161,7 +161,7 @@ jobs:
           if [ "$ARCH" = amd64 ]; then cp THIRD_PARTY_NOTICES.txt out/; fi
           cp build/bin/leme "out/leme-${VERSION}-linux-${ARCH}"
           bash build/linux/package-deb.sh build/bin/leme "${VERSION}" "${ARCH}" out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: apps/desktop/out/*
@@ -173,14 +173,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: out
           merge-multiple: true
       - name: Checksums
         working-directory: out
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.meta.outputs.version }}
           name: Leme v${{ needs.meta.outputs.version }}
