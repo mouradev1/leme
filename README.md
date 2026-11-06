@@ -115,8 +115,8 @@ go test ./... && (cd frontend && npm run typecheck)
 Push a tag and GitHub Actions builds every platform and publishes the release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag -a v0.3.0 -m "v0.3.0"
+git push origin v0.3.0
 ```
 
 To test the pipeline without publishing, run the **Release** workflow manually
