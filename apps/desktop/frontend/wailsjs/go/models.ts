@@ -50,6 +50,20 @@ export namespace api {
 	        this.skippedVersion = source["skippedVersion"];
 	    }
 	}
+	export class SavedLogs {
+	    path: string;
+	    lines: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SavedLogs(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.lines = source["lines"];
+	    }
+	}
 	export class ServerInfo {
 	    context: string;
 	    version: string;

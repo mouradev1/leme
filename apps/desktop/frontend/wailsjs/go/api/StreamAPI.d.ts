@@ -6,6 +6,10 @@ import {resources} from '../models';
 
 export function ActiveSubscriptions():Promise<number>;
 
+export function SaveLogs(arg1:string,arg2:stream.LogOptions,arg3:string):Promise<api.SavedLogs>;
+
+export function SaveText(arg1:string,arg2:string):Promise<string>;
+
 export function StreamLogs(arg1:string,arg2:string,arg3:stream.LogOptions):Promise<void>;
 
 export function Unsubscribe(arg1:string):Promise<void>;

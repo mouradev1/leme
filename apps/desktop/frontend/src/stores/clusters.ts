@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
-import { ListContexts, Connect, Namespaces } from '../../wailsjs/go/api/ClusterAPI'
+import { ListContexts, Connect, Disconnect, Namespaces } from '../../wailsjs/go/api/ClusterAPI'
 import { Catalog, RefreshCatalog } from '../../wailsjs/go/api/ResourceAPI'
 import type { api, cluster, resources } from '../../wailsjs/go/models'
 import { errMsg, on } from '@/lib/bridge'
@@ -49,6 +49,22 @@ export const useClusters = defineStore('clusters', () => {
     }
   }
 
+  /**
+   * Close a cluster's connection (watches, log/exec streams, port-forwards).
+   * Its saved tabs stay and come back on the next connect.
+   */
+  async function disconnect(name: string) {
+    await Disconnect(name)
+    if (active.value === name) {
+      active.value = ''
+      server.value = null
+      catalog.value = []
+      namespaces.value = []
+      selectedNamespaces.value = []
+    }
+    await load()
+  }
+
   /** Resolve a Kind name (e.g. "Node", "ReplicaSet"); built-ins win over CRDs with the same name. */
   function findKind(kindName: string): resources.Kind | undefined {
     const matches = catalog.value.filter((k) => k.kind === kindName)
@@ -76,7 +92,7 @@ export const useClusters = defineStore('clusters', () => {
 
   return {
     contexts, active, server, catalog, namespaces, selectedNamespaces, connecting, error, sections,
-    load, activate, refreshCatalog, findKind,
+    load, activate, disconnect, refreshCatalog, findKind,
   }
 })
 

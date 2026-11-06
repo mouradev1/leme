@@ -36,7 +36,12 @@ func (a *ClusterAPI) Connect(name string) (ServerInfo, error) {
 	return ServerInfo{Context: name, Version: s.Version, Server: s.Config.Host, DefaultNamespace: s.DefaultNamespace()}, nil
 }
 
-func (a *ClusterAPI) Disconnect(name string) { a.d.Clusters.Disconnect(name) }
+func (a *ClusterAPI) Disconnect(name string) {
+	if a.d.Forwards != nil {
+		a.d.Forwards.StopCluster(name)
+	}
+	a.d.Clusters.Disconnect(name)
+}
 
 // KubeconfigFiles lists every file feeding the context list.
 func (a *ClusterAPI) KubeconfigFiles() []cluster.KubeconfigFile { return a.d.Clusters.Files() }

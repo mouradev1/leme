@@ -71,6 +71,7 @@ export type View =
   | { type: 'helm' }
   | { type: 'portforwards' }
   | { type: 'resource'; kind: resources.Kind }
+  | { type: 'dock'; id: string } // a dock stream (logs/terminal) shown in a main-area pane
 
 // cluster: the kubeconfig context the tab was opened in. A tab ALWAYS talks to
 // that cluster, never to whichever cluster is active now (a shell must not

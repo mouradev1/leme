@@ -5,6 +5,7 @@
  * the object's events (a scoped live watch on core/v1 events).
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { resources } from '../../wailsjs/go/models'
 import { useResourceWatch } from '@/composables/useResourceWatch'
 import type { Column, NavigateTarget, Row, RowAction } from '@/lib/types'
@@ -136,6 +137,17 @@ const dotClass = (c: { state: string; ready: boolean; stateReason: string }) =>
     : c.state === 'waiting' && /BackOff|Err/.test(c.stateReason) ? 'bg-rose-500'
       : c.state === 'terminated' ? 'bg-zinc-500' : 'bg-amber-500'
 
+// Copy the object's name from the header; the icon turns into a check briefly.
+const copied = ref(false)
+let copiedTimer = 0
+async function copyName() {
+  await ClipboardSetText(props.row.name)
+  copied.value = true
+  clearTimeout(copiedTimer)
+  copiedTimer = window.setTimeout(() => (copied.value = false), 1500)
+}
+onBeforeUnmount(() => clearTimeout(copiedTimer))
+
 // Drag the left edge to resize; double-click it to restore the default width.
 const panel = usePanelWidth(isPod ? 'details-pod' : 'details', isPod ? 560 : 480)
 const canDelete = computed(() => actionsFor(props.kind, props.row).includes('delete'))
@@ -152,9 +164,16 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
     <!-- Header -->
     <header class="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-800 px-4">
       <button v-if="back" class="icon-btn -ml-2" :title="`Voltar para ${back}`" @click="emit('back')"><Icon name="back" :size="15" /></button>
-      <h2 class="min-w-0 flex-1 truncate text-[13px] text-zinc-100" :title="row.name">
-        <span class="font-semibold">{{ kind.kind }}:</span> {{ row.name }}
-      </h2>
+      <div class="flex min-w-0 flex-1 items-center gap-1">
+        <h2 class="min-w-0 truncate text-[13px] text-zinc-100 select-text" :title="row.name">
+          <span class="font-semibold">{{ kind.kind }}:</span> {{ row.name }}
+        </h2>
+        <button
+          class="grid h-6 w-6 shrink-0 place-items-center rounded-md hover:bg-zinc-800"
+          :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-100'"
+          :title="copied ? 'Copiado' : 'Copiar nome'" @click="copyName"
+        ><Icon :name="copied ? 'check' : 'copy'" :size="13" /></button>
+      </div>
       <span v-if="gone" class="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] text-rose-300">excluído</span>
       <div v-if="hasAction('logs')" class="relative" @mouseenter="containers.length > 1 && hoverMenu('logs')" @mouseleave="hoverMenu(null)">
         <button class="icon-btn" :class="menuOpen === 'logs' && 'bg-zinc-800 text-zinc-100'" title="Logs" @click="openLogs">

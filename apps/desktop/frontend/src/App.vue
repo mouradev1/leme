@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Cordon, Delete, Drain, PodContainers, Restart, Scale, WorkloadPods } from '../wailsjs/go/api/ResourceAPI'
 import { Unsubscribe } from '../wailsjs/go/api/StreamAPI'
@@ -14,8 +14,20 @@ import KubeconfigManager from '@/components/KubeconfigManager.vue'
 import UpdateDialog from '@/components/UpdateDialog.vue'
 import PortForwardDialog from '@/components/PortForwardDialog.vue'
 import PortForwards from '@/components/PortForwards.vue'
+import TabStrip, { type TabLabel } from '@/components/TabStrip.vue'
+import HostSlot from '@/components/HostSlot.vue'
+import LogViewer from '@/components/LogViewer.vue'
+import TerminalPane from '@/components/TerminalPane.vue'
+import ContextMenu, { type MenuItem } from '@/components/ContextMenu.vue'
+import {
+  activeOf, closeTab as closeMainTab, dragging, ensure, forgetDock, moveTab, openTab as openMainTab,
+  placeDock, placedDockIds, setView, split, unsplit, workspaces, type MainTab,
+} from '@/lib/workspace'
+import { dropHosts, hostOf } from '@/lib/hosts'
+import { icons } from '@/lib/icons'
 import { forwardRequest, forwards, forwardURL, openForward, trackForwards } from '@/lib/forward'
 import { CheckUpdate } from '../wailsjs/go/api/AppAPI'
+import { ClipboardSetText } from '../wailsjs/runtime/runtime'
 import type { update } from '../wailsjs/go/models'
 import Icon from '@/components/Icon.vue'
 import { useClusters } from '@/stores/clusters'
@@ -29,17 +41,42 @@ const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs
 onMounted(() => {
   store.load()
   trackForwards()
-  // New-version notice: one anonymous request to GitHub's releases endpoint,
-  // a few seconds after startup; off when the user disabled it or on dev builds.
-  setTimeout(() => {
-    CheckUpdate(true)
-      .then((i) => { if (i.available) { updateInfo.value = i; showUpdate.value = true } })
-      .catch(() => { /* offline or rate-limited: stay quiet */ })
-  }, 4000)
+  // New-version notice: a few seconds after startup, then again on the first
+  // use of each new day (the app often stays open for days).
+  setTimeout(autoCheckUpdate, 4000)
+  window.addEventListener('focus', autoCheckUpdate)
+  dayTimer = window.setInterval(autoCheckUpdate, 60 * 60 * 1000)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', autoCheckUpdate)
+  clearInterval(dayTimer)
 })
 
 const updateInfo = shallowRef<update.Info | null>(null)
 const showUpdate = ref(false)
+// Automatic check: one anonymous request to GitHub's releases endpoint, at most
+// once per day (off when the user disabled it or on dev builds). The dialog
+// shows at most once a day; "Depois" means "remind me tomorrow".
+const UPDATE_DAY_KEY = 'leme:update-checked-day'
+let dayTimer = 0
+let checking = false
+const today = () => new Date().toLocaleDateString('sv') // YYYY-MM-DD, local time
+function lastCheckDay() {
+  try { return localStorage.getItem(UPDATE_DAY_KEY) ?? '' } catch { return '' }
+}
+async function autoCheckUpdate() {
+  const day = today()
+  if (checking || showUpdate.value || lastCheckDay() === day) return
+  checking = true
+  try {
+    const i = await CheckUpdate(true)
+    try { localStorage.setItem(UPDATE_DAY_KEY, day) } catch { /* try again next time */ }
+    if (i.available) { updateInfo.value = i; showUpdate.value = true }
+  } catch { /* offline or rate-limited: stay quiet, retry later */ } finally {
+    checking = false
+  }
+}
+
 async function checkUpdateNow() {
   try {
     const i = await CheckUpdate(false)
@@ -51,8 +88,6 @@ async function checkUpdateNow() {
   }
 }
 
-const view = shallowRef<View | null>(null)
-const search = ref('')
 const showKubeconfigs = ref(false)
 const toast = ref('')
 let toastTimer = 0
@@ -64,7 +99,188 @@ function flash(msg: string) {
 
 async function openCluster(name: string) {
   await store.activate(name)
-  if (store.active === name) view.value = { type: 'overview' }
+  if (store.active === name) ensure(name) // first time: an Overview tab; later: the saved tabs
+}
+
+// ---- Main-area tabs and split panes (lib/workspace.ts) ----------------------
+// One workspace per cluster; only each pane's active tab is mounted.
+watch(active, (c) => { if (c) ensure(c) }, { immediate: true })
+const ws = computed(() => (active.value ? workspaces[active.value] ?? null : null))
+const focusedTab = computed(() => {
+  const w = ws.value
+  return w ? activeOf(w.panes[w.focus] ?? w.panes[0]) : null
+})
+// The sidebar shows and changes the focused pane's current tab.
+const view = computed<View | null>({
+  get: () => focusedTab.value?.view ?? null,
+  set: (v) => {
+    const w = ws.value
+    if (!w || !v) return
+    setView(w, w.focus, v)
+    editing.value = null
+  },
+})
+function openInNewTab(v: View) {
+  const w = ws.value
+  if (w) openMainTab(w, w.focus, v)
+}
+
+// Saved tabs keep the kind as it was; prefer the live catalog entry.
+const kindFor = (k: resources.Kind) => store.catalog.find((c) => c.group === k.group && c.resource === k.resource) ?? k
+const resourceKind = (t: MainTab) => (t.view.type === 'resource' ? kindFor(t.view.kind) : null)!
+
+function tabLabel(t: MainTab): TabLabel {
+  const v = t.view
+  switch (v.type) {
+    case 'overview': return { title: 'Overview', icon: 'overview' }
+    case 'helm': return { title: 'Helm', icon: 'Helm' }
+    case 'portforwards': return { title: 'Port Forwards', icon: 'forward' }
+    case 'resource': return { title: v.kind.kind, sub: t.search || undefined, icon: icons[v.kind.category] ? v.kind.category : 'list' }
+    case 'dock': {
+      const d = tabs.value.find((x) => x.id === v.id)
+      return d?.type === 'logs'
+        ? { title: d.title, icon: 'logs', tone: 'text-amber-400' }
+        : { title: d?.title ?? 'terminal', icon: 'terminal', tone: 'text-emerald-400' }
+    }
+  }
+}
+
+function closeMain(pane: number, id: string) {
+  const w = ws.value
+  const t = w?.panes[pane]?.tabs.find((x) => x.id === id)
+  if (!w || !t) return
+  if (t.view.type === 'dock') closeTab(t.view.id) // closing a stream's tab ends the stream
+  else closeMainTab(w, pane, id)
+}
+
+// Split divider: drag to resize, double-click to center.
+const panesEl = ref<HTMLElement | null>(null)
+function startSplitDrag(e: MouseEvent) {
+  const w = ws.value
+  if (!w || !panesEl.value) return
+  e.preventDefault()
+  const r = panesEl.value.getBoundingClientRect()
+  const move = (ev: MouseEvent) => (w.ratio = Math.min(0.8, Math.max(0.2, (ev.clientX - r.left) / r.width)))
+  const up = () => {
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+    document.body.style.cursor = ''
+  }
+  document.body.style.cursor = 'col-resize'
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+}
+const paneStyle = (pi: number) => {
+  const w = ws.value!
+  return w.panes.length > 1 ? { flex: `${pi === 0 ? w.ratio : 1 - w.ratio} 1 0%` } : { flex: '1 1 0%' }
+}
+
+// Drop targets while a tab is dragged: beside (opens the split), or into a pane.
+function dropZones(pi: number): ('here' | 'beside')[] {
+  const w = ws.value, d = dragging.value
+  if (!w || !d) return []
+  if (w.panes.length === 1) {
+    const zones: ('here' | 'beside')[] = []
+    if (d.src === 'dock') zones.push('here')
+    if (d.src === 'dock' || w.panes[0].tabs.length > 1) zones.push('beside')
+    return zones
+  }
+  return d.src === 'dock' || d.pane !== pi ? ['here'] : []
+}
+function dropOnPane(pi: number, zone: 'here' | 'beside', at?: number) {
+  const w = ws.value, d = dragging.value
+  dragging.value = null
+  if (!w || !d) return
+  const to = zone === 'beside' ? w.panes.length : pi
+  if (d.src === 'dock') placeDock(w, to, d.id)
+  else moveTab(w, d.pane, d.id, to, at)
+}
+// A drag whose source element moved/unmounted may never fire dragend.
+const endDrag = () => setTimeout(() => (dragging.value = null))
+onMounted(() => { window.addEventListener('dragend', endDrag, true); window.addEventListener('drop', endDrag, true) })
+onBeforeUnmount(() => { window.removeEventListener('dragend', endDrag, true); window.removeEventListener('drop', endDrag, true) })
+
+// Right-click menus for main tabs and dock tabs (the no-drag way to do it all).
+const tabMenu = shallowRef<{ x: number; y: number; title: string; items: MenuItem<string>[]; run: (v: string) => void } | null>(null)
+function openMainMenu(e: MouseEvent, pane: number, id: string) {
+  const w = ws.value
+  const t = w?.panes[pane]?.tabs.find((x) => x.id === id)
+  if (!w || !t) return
+  const isDock = t.view.type === 'dock'
+  const items: MenuItem<string>[] = []
+  if (w.panes.length > 1) items.push({ value: 'move', label: 'Mover para o outro painel' })
+  else if (w.panes[0].tabs.length > 1) items.push({ value: 'beside', label: 'Abrir ao lado' })
+  if (!isDock) items.push({ value: 'dup', label: 'Duplicar aba' })
+  if (isDock) items.push({ value: 'dock', label: 'Voltar para o dock' })
+  items.push({ value: 'close', label: 'Fechar aba', separatorBefore: true })
+  if (w.panes[pane].tabs.length > 1) items.push({ value: 'others', label: 'Fechar as outras abas' })
+  tabMenu.value = {
+    x: e.clientX, y: e.clientY, title: tabLabel(t).title, items,
+    run: (v) => {
+      if (v === 'move') moveTab(w, pane, id, pane === 0 ? 1 : 0)
+      else if (v === 'beside') moveTab(w, pane, id, w.panes.length)
+      else if (v === 'dup') openMainTab(w, pane, t.view, t.search)
+      else if (v === 'dock' && t.view.type === 'dock') backToDock(t.view.id)
+      else if (v === 'close') closeMain(pane, id)
+      else if (v === 'others') for (const o of [...w.panes[pane].tabs]) if (o.id !== id) closeMain(pane, o.id)
+    },
+  }
+}
+// Right-click a cluster: connect / open / disconnect.
+function openClusterMenu(e: MouseEvent, name: string) {
+  const c = contexts.value.find((x) => x.name === name)
+  if (!c) return
+  const items: MenuItem<string>[] = []
+  if (!c.connected) items.push({ value: 'connect', label: 'Conectar' })
+  else if (name !== active.value) items.push({ value: 'connect', label: 'Abrir' })
+  if (c.connected) items.push({ value: 'disconnect', label: 'Desconectar', danger: true, separatorBefore: items.length > 0 })
+  items.push({ value: 'copy', label: 'Copiar nome', separatorBefore: true })
+  tabMenu.value = {
+    x: e.clientX, y: e.clientY, title: name, items,
+    run: (v) => {
+      if (v === 'connect') void openCluster(name)
+      else if (v === 'disconnect') disconnectCluster(name)
+      else if (v === 'copy') void ClipboardSetText(name)
+    },
+  }
+}
+
+// Disconnect: close that cluster's streams first (a node shell removes its pod
+// on close), then the session; its saved main tabs come back on reconnect.
+function disconnectCluster(name: string) {
+  const streams = tabs.value.filter((t) => t.cluster === name)
+  const fwds = forwards.value.filter((f) => f.cluster === name)
+  const run = async () => {
+    for (const t of streams) closeTab(t.id)
+    if (editing.value?.cluster === name) editing.value = null
+    await store.disconnect(name)
+    flash(`Desconectado de ${name}`)
+  }
+  const parts = [
+    streams.length && `${streams.length} aba(s) de logs/terminal`,
+    fwds.length && `${fwds.length} port-forward(s)`,
+  ].filter(Boolean)
+  if (parts.length) confirm(`Desconectar de ${name}? Isso fecha ${parts.join(' e ')}.`, run)
+  else void run().catch((e) => flash(errMsg(e)))
+}
+
+function openDockMenu(e: MouseEvent, id: string) {
+  const w = ws.value
+  const d = tabs.value.find((x) => x.id === id)
+  if (!w || !d) return
+  tabMenu.value = {
+    x: e.clientX, y: e.clientY, title: d.title,
+    items: [
+      { value: 'main', label: 'Abrir na área principal' },
+      ...(w.panes.length === 1 ? [{ value: 'beside', label: 'Abrir ao lado' }] : []),
+      { value: 'close', label: 'Fechar', separatorBefore: true },
+    ],
+    run: (v) => {
+      if (v === 'main') placeDock(w, w.focus, id)
+      else if (v === 'beside') placeDock(w, w.panes.length, id)
+      else if (v === 'close') closeTab(id)
+    },
+  }
 }
 
 // ---- YAML editor panel -----------------------------------------------------
@@ -73,26 +289,20 @@ async function openCluster(name: string) {
 const editing = shallowRef<{ cluster: string; kind?: resources.Ref; namespace?: string; name?: string; initialYaml?: string; key: string } | null>(null)
 watch(active, () => (editing.value = null))
 
-// Changing view clears the search, unless the change came from a link.
-let keepSearch = false
-watch(view, () => {
-  if (!keepSearch) search.value = ''
-  keepSearch = false
-  editing.value = null
-})
-
-function navigate(t: NavigateTarget) {
+// A link (Controlled By, Namespace...) opens in the pane it was clicked in.
+function navigate(t: NavigateTarget, pane?: number) {
   const k = store.findKind(t.kind)
   if (!k) return flash(`Tipo ${t.kind} não encontrado neste cluster`)
-  keepSearch = true
-  view.value = { type: 'resource', kind: k }
-  search.value = t.search ?? ''
+  const w = ws.value
+  if (!w) return
+  setView(w, pane ?? w.focus, { type: 'resource', kind: k }, t.search ?? '')
+  editing.value = null
   if (t.namespace && k.namespaced && selectedNamespaces.value.length && !selectedNamespaces.value.includes(t.namespace)) {
     selectedNamespaces.value = [t.namespace]
   }
 }
 
-const currentKind = computed(() => (view.value?.type === 'resource' ? view.value.kind : null))
+const currentKind = computed(() => (view.value?.type === 'resource' ? kindFor(view.value.kind) : null))
 
 function createTemplate(k: resources.Kind): string {
   const apiVersion = k.group ? `${k.group}/${k.version}` : k.version
@@ -107,14 +317,25 @@ const activeTab = ref('')
 const dockMax = ref(false)
 // Tabs are bound to the cluster they were opened in. Switching clusters shows
 // only that cluster's tabs; the others stay alive (hidden) and come back.
+// A tab moved to a main-area pane leaves the dock's bar while it's there.
+const placed = computed(() => placedDockIds())
+const dockTabs = computed(() => tabs.value.filter((t) => !placed.value.has(t.id)))
 const lastTabByCluster = new Map<string, string>()
-const clusterTabs = (c: string) => tabs.value.filter((t) => t.cluster === c)
+const clusterTabs = (c: string) => dockTabs.value.filter((t) => t.cluster === c)
+watch(placed, (p) => { if (p.has(activeTab.value)) activeTab.value = clusterTabs(active.value).at(-1)?.id ?? '' })
+function backToDock(id: string) {
+  forgetDock(id)
+  activeTab.value = id
+}
+// Hosts of closed tabs go once their components have unmounted.
+watch(() => tabs.value.map((t) => t.id), (ids) => dropHosts(new Set(ids)), { flush: 'post' })
 function openTab(t: NewDockTab) {
   const tab = { ...t, cluster: active.value } as DockTab
   tabs.value.push(tab)
   activeTab.value = tab.id
 }
 function closeTab(id: string) {
+  forgetDock(id)
   tabs.value = tabs.value.filter((t) => t.id !== id) // unmount => unsubscribe / close PTY
   if (activeTab.value === id) activeTab.value = clusterTabs(active.value).at(-1)?.id ?? ''
 }
@@ -219,8 +440,7 @@ function onContainer(action: 'logs' | 'previous' | 'shell', container: string, r
   }
 }
 
-function bulkDelete(rows: Row[]) {
-  const k = currentKind.value!
+function bulkDelete(rows: Row[], k: resources.Kind) {
   confirm(`Excluir ${rows.length} ${k.kind}(s)?`, async () => {
     const res = await Promise.allSettled(rows.map((r) => Delete(active.value, k, r.namespace ?? '', r.name, false)))
     const failed = res.filter((r) => r.status === 'rejected').length
@@ -236,21 +456,63 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
 <template>
   <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
     <div class="flex min-h-0 flex-1">
-      <Sidebar v-model:view="view" @add-kubeconfig="showKubeconfigs = true" @open-cluster="openCluster" :update-available="!!updateInfo?.available" @check-update="checkUpdateNow" />
+      <Sidebar v-model:view="view" @open-tab="openInNewTab" @cluster-menu="openClusterMenu" @add-kubeconfig="showKubeconfigs = true" @open-cluster="openCluster" :update-available="!!updateInfo?.available" @check-update="checkUpdateNow" />
 
       <main class="flex min-w-0 flex-1 flex-col">
         <div v-show="!dockMax" class="flex min-h-0 flex-1">
-          <section class="min-w-0 flex-1">
-            <template v-if="active && view">
-              <Overview v-if="view.type === 'overview'" :key="active" :cluster="active" @navigate="navigate" />
-              <HelmReleases v-else-if="view.type === 'helm'" :key="active" :cluster="active" @confirm="confirm" @toast="flash" />
-              <PortForwards v-else-if="view.type === 'portforwards'" @toast="flash" />
-              <ResourceTable
-                v-else :key="`${active}|${view.kind.group}/${view.kind.resource}`"
-                v-model:search="search" :cluster="active" :kind="view.kind"
-                @action="onAction" @bulk-delete="bulkDelete" @navigate="navigate" @container="onContainer"
-                @create="editing = { cluster: active, initialYaml: createTemplate(view.kind), key: newId() }"
-              />
+          <section ref="panesEl" class="flex min-w-0 flex-1">
+            <template v-if="active && ws">
+              <template v-for="(p, pi) in ws.panes" :key="pi">
+                <div
+                  v-if="pi > 0" class="relative z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize bg-zinc-800 transition-colors hover:bg-sky-500/50"
+                  title="Arraste para redimensionar (duplo clique: metade)" @mousedown="startSplitDrag" @dblclick="ws.ratio = 0.5"
+                />
+                <div class="flex min-w-0 flex-col" :style="paneStyle(pi)" @mousedown.capture="ws.focus = pi">
+                  <TabStrip
+                    :pane="pi" :tabs="p.tabs" :active="p.active" :focused="ws.panes.length > 1 && ws.focus === pi" :label="tabLabel"
+                    :split-state="ws.panes.length === 1 ? 'can-split' : pi === ws.panes.length - 1 ? 'can-unsplit' : 'none'"
+                    @select="(id) => { p.active = id; ws!.focus = pi }" @close="(id) => closeMain(pi, id)"
+                    @new="openMainTab(ws!, pi, { type: 'overview' })" @split="split(ws!)" @unsplit="unsplit(ws!)"
+                    @drop="(at) => dropOnPane(pi, 'here', at)" @menu="(e, id) => openMainMenu(e, pi, id)"
+                  />
+                  <div class="relative min-h-0 flex-1">
+                    <template v-for="t in p.tabs" :key="t.id">
+                      <template v-if="t.id === p.active">
+                        <HostSlot v-if="t.view.type === 'dock'" :id="t.view.id" />
+                        <div v-else class="absolute inset-0">
+                          <Overview v-if="t.view.type === 'overview'" :key="active" :cluster="active" @navigate="(n) => navigate(n, pi)" />
+                          <HelmReleases v-else-if="t.view.type === 'helm'" :key="active" :cluster="active" @confirm="confirm" @toast="flash" />
+                          <PortForwards v-else-if="t.view.type === 'portforwards'" @toast="flash" />
+                          <ResourceTable
+                            v-else-if="t.view.type === 'resource'" :key="`${active}|${t.view.kind.group}/${t.view.kind.resource}`"
+                            v-model:search="t.search" :cluster="active" :kind="resourceKind(t)"
+                            @action="(a, r, k) => onAction(a, r, k ?? resourceKind(t))" @bulk-delete="(rows) => bulkDelete(rows, resourceKind(t))"
+                            @navigate="(n) => navigate(n, pi)" @container="onContainer"
+                            @create="editing = { cluster: active, initialYaml: createTemplate(resourceKind(t)), key: newId() }"
+                          />
+                        </div>
+                      </template>
+                    </template>
+                    <div v-if="!p.tabs.length" class="grid h-full place-items-center text-sm text-zinc-500">
+                      <div class="text-center">
+                        <p>Nenhuma aba aberta.</p>
+                        <button class="mt-2 text-sky-400 hover:underline" @click="openMainTab(ws!, pi, { type: 'overview' })">Abrir Overview</button>
+                      </div>
+                    </div>
+
+                    <!-- Drop targets while dragging a tab -->
+                    <div v-if="dropZones(pi).length" class="absolute inset-0 z-30 flex gap-2 p-2">
+                      <div
+                        v-for="z in dropZones(pi)" :key="z"
+                        class="grid flex-1 place-items-center rounded-lg border-2 border-dashed border-sky-600/50 bg-zinc-950/70 text-xs text-sky-300 backdrop-blur-[1px] [&.drop-hot]:border-sky-400 [&.drop-hot]:bg-sky-950/60"
+                        @dragover.prevent="($event.currentTarget as HTMLElement).classList.add('drop-hot')"
+                        @dragleave="($event.currentTarget as HTMLElement).classList.remove('drop-hot')"
+                        @drop.prevent="dropOnPane(pi, z)"
+                      >{{ z === 'beside' ? 'Abrir ao lado' : ws.panes.length > 1 ? 'Mover para este painel' : 'Abrir aqui' }}</div>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </template>
 
             <!-- Welcome -->
@@ -262,7 +524,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
                   <button
                     v-for="c in contexts" :key="c.name"
                     class="group flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-left transition hover:border-sky-700 hover:bg-zinc-900"
-                    @click="openCluster(c.name)"
+                    @click="openCluster(c.name)" @contextmenu.prevent="openClusterMenu($event, c.name)"
                   >
                     <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white" :style="{ background: `hsl(${hue(c.name)} 55% 42%)` }">{{ initials(c.name) }}</span>
                     <span class="min-w-0 flex-1">
@@ -297,7 +559,8 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
 
         <Dock
           v-if="active" v-model:active="activeTab" v-model:maximized="dockMax"
-          :cluster="active" :tabs="tabs" @close="closeTab" @new-terminal="newTerminal"
+          :cluster="active" :tabs="dockTabs" @close="closeTab" @new-terminal="newTerminal"
+          @menu="openDockMenu" @drop-back="backToDock"
         />
       </main>
     </div>
@@ -313,6 +576,14 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
       </template>
       <span v-else>desconectado</span>
     </footer>
+
+    <!-- Dock streams: rendered once into stable hosts, shown in the dock or a pane.
+         Each talks to ITS tab's cluster (t.cluster), never the active one. -->
+    <Teleport v-for="t in tabs" :key="t.id" :to="hostOf(t.id)">
+      <LogViewer v-if="t.type === 'logs'" :cluster="t.cluster" :namespace="t.namespace" :targets="t.targets" :previous="t.previous" :note="t.note" />
+      <TerminalPane v-else :cluster="t.cluster" :target="t.target" :node="t.node" />
+    </Teleport>
+    <ContextMenu v-if="tabMenu" :x="tabMenu.x" :y="tabMenu.y" :title="tabMenu.title" :items="tabMenu.items" @select="tabMenu.run" @close="tabMenu = null" />
 
     <PortForwardDialog
       v-if="forwardRequest" :target="forwardRequest" @close="forwardRequest = null"

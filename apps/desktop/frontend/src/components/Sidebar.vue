@@ -13,7 +13,7 @@ import { forwards } from '@/lib/forward'
 
 const view = defineModel<View | null>('view', { required: true })
 defineProps<{ updateAvailable?: boolean }>()
-const emit = defineEmits<{ addKubeconfig: []; openCluster: [name: string]; checkUpdate: [] }>()
+const emit = defineEmits<{ addKubeconfig: []; openCluster: [name: string]; checkUpdate: []; openTab: [view: View]; clusterMenu: [e: MouseEvent, name: string] }>()
 
 const store = useClusters()
 const { contexts, active, sections, connecting, error, catalog } = storeToRefs(store)
@@ -66,7 +66,14 @@ const matches = computed(() => {
 
 const isActive = (k: resources.Kind) =>
   view.value?.type === 'resource' && view.value.kind.group === k.group && view.value.kind.resource === k.resource
-const go = (k: resources.Kind) => (view.value = { type: 'resource', kind: k })
+// Plain click: show in the current tab. Middle click or ⌘/Ctrl-click: new tab.
+function nav(v: View, e?: MouseEvent) {
+  if (e && (e.button === 1 || e.metaKey || e.ctrlKey)) {
+    e.preventDefault()
+    emit('openTab', v)
+  } else if (!e || e.button === 0) view.value = v
+}
+const go = (k: resources.Kind, e?: MouseEvent) => nav({ type: 'resource', kind: k }, e)
 const clusterOpen = ref(true)
 
 // Cluster list mode: 'compact' shows only the active cluster (switch via a
@@ -125,7 +132,8 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
     <div v-if="compact && clusterOpen" ref="switcherRoot" class="relative px-1.5 pb-2">
       <button
         class="flex w-full items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-2 text-left hover:border-zinc-700"
-        title="Trocar de cluster" @click="switcherOpen = !switcherOpen"
+        title="Trocar de cluster (botão direito: desconectar)" @click="switcherOpen = !switcherOpen"
+        @contextmenu.prevent="emit('clusterMenu', $event, active)"
       >
         <span class="relative grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-bold text-white" :style="{ background: `hsl(${hue(active)} 55% 42%)` }">
           {{ initials(active) }}
@@ -150,6 +158,7 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
             v-for="c in switcherList" :key="c.name"
             class="flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left hover:bg-zinc-800"
             :class="c.name === active && 'text-sky-300'" @click="pick(c.name)"
+            @contextmenu.prevent="switcherOpen = false; emit('clusterMenu', $event, c.name)"
           >
             <span class="relative grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-bold text-white" :style="{ background: `hsl(${hue(c.name)} 55% 42%)` }">
               {{ initials(c.name) }}
@@ -169,7 +178,8 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
         v-for="c in contexts" :key="c.name"
         class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/70"
         :class="c.name === active && 'bg-zinc-800 text-zinc-50'"
-        :title="`${c.server}\nauth: ${c.auth}\n${c.source}`" @click="emit('openCluster', c.name)"
+        :title="`${c.server}\nauth: ${c.auth}\n${c.source}\n\nBotão direito: conectar / desconectar`" @click="emit('openCluster', c.name)"
+        @contextmenu.prevent="emit('clusterMenu', $event, c.name)"
       >
         <span
           class="relative grid h-6 w-6 shrink-0 place-items-center rounded-md text-[10px] font-bold text-white"
@@ -196,13 +206,13 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
           @keydown.esc="filter = ''"
         />
       </div>
-      <nav class="min-h-0 flex-1 overflow-auto px-1.5 pb-3">
+      <nav class="min-h-0 flex-1 overflow-auto px-1.5 pb-3" @mousedown.middle.prevent>
         <!-- Flat results while filtering -->
         <template v-if="matches">
           <button
             v-for="k in matches" :key="`${k.group}/${k.resource}`"
             class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-zinc-800/70"
-            :class="isActive(k) && 'bg-sky-500/15 text-sky-200'" @click="go(k)"
+            :class="isActive(k) && 'bg-sky-500/15 text-sky-200'" @click="go(k, $event)" @auxclick="go(k, $event)"
           >
             <span class="min-w-0 flex-1 truncate">{{ k.kind }}</span>
             <span class="truncate text-[10px] text-zinc-600">{{ k.group || 'core' }}</span>
@@ -213,7 +223,7 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
         <template v-else>
           <button
             class="nav-item" :class="view?.type === 'overview' && 'nav-active'"
-            @click="view = { type: 'overview' }"
+            @click="nav({ type: 'overview' }, $event)" @auxclick="nav({ type: 'overview' }, $event)"
           ><Icon name="overview" /> Overview</button>
 
           <template v-for="s in tree" :key="s.name">
@@ -221,7 +231,7 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
             <button
               v-if="LEAF.has(s.name) && leafKind(s.name)"
               class="nav-item" :class="isActive(leafKind(s.name)!) && 'nav-active'"
-              @click="go(leafKind(s.name)!)"
+              @click="go(leafKind(s.name)!, $event)" @auxclick="go(leafKind(s.name)!, $event)"
             ><Icon :name="s.name" /> {{ s.name }}</button>
 
             <!-- collapsible sections -->
@@ -234,7 +244,7 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
               <div v-if="open.has(s.name)" class="ml-[22px] border-l border-zinc-800 pl-1.5">
                 <button
                   v-for="k in s.kinds" :key="`${k.group}/${k.resource}`"
-                  class="nav-sub" :class="isActive(k) && 'nav-active'" @click="go(k)"
+                  class="nav-sub" :class="isActive(k) && 'nav-active'" @click="go(k, $event)" @auxclick="go(k, $event)"
                 >{{ s.name === 'Custom Resources' ? 'Definitions' : k.kind }}</button>
                 <div v-for="g in s.groups" :key="g.group">
                   <button class="nav-sub text-zinc-400" @click="toggle(`crd:${g.group}`)">
@@ -244,7 +254,7 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
                   <div v-if="open.has(`crd:${g.group}`)" class="ml-3 border-l border-zinc-800 pl-1.5">
                     <button
                       v-for="k in g.kinds" :key="k.resource"
-                      class="nav-sub" :class="isActive(k) && 'nav-active'" @click="go(k)"
+                      class="nav-sub" :class="isActive(k) && 'nav-active'" @click="go(k, $event)" @auxclick="go(k, $event)"
                     >{{ k.kind }}</button>
                   </div>
                 </div>
@@ -258,9 +268,9 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
                 <Icon name="Helm" /> Helm
               </button>
               <div v-if="open.has('Helm')" class="ml-[22px] border-l border-zinc-800 pl-1.5">
-                <button class="nav-sub" :class="view?.type === 'helm' && 'nav-active'" @click="view = { type: 'helm' }">Releases</button>
+                <button class="nav-sub" :class="view?.type === 'helm' && 'nav-active'" @click="nav({ type: 'helm' }, $event)" @auxclick="nav({ type: 'helm' }, $event)">Releases</button>
               </div>
-              <button class="nav-item" :class="view?.type === 'portforwards' && 'nav-active'" @click="view = { type: 'portforwards' }">
+              <button class="nav-item" :class="view?.type === 'portforwards' && 'nav-active'" @click="nav({ type: 'portforwards' }, $event)" @auxclick="nav({ type: 'portforwards' }, $event)">
                 <Icon name="forward" /> Port Forwards
                 <span v-if="forwards.length" class="ml-auto rounded-full bg-sky-500/15 px-1.5 text-[10px] text-sky-300">{{ forwards.length }}</span>
               </button>

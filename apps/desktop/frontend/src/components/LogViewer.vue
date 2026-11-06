@@ -6,8 +6,11 @@
 import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { stream } from '../../wailsjs/go/models'
+import { SaveLogs, SaveText } from '../../wailsjs/go/api/StreamAPI'
 import { useLogStream } from '@/composables/useLogStream'
 import type { LogLine } from '@/lib/types'
+import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import Icon from './Icon.vue'
 
 const props = defineProps<{
   cluster: string
@@ -67,6 +70,48 @@ function onScroll() {
 const palette = ['text-sky-400', 'text-amber-400', 'text-emerald-400', 'text-fuchsia-400', 'text-rose-400', 'text-teal-300', 'text-violet-300']
 const colorIndex = computed(() => new Map(props.targets.map((t, i) => [`${t.pod}/${t.container}`, i])))
 const colorOf = (l: { p: string; c: string }) => palette[(colorIndex.value.get(keyOf(l)) ?? 0) % palette.length]
+// ---- Download ----------------------------------------------------------------
+type SaveKind = 'full' | 'screen'
+const saveMenu = ref<{ x: number; y: number } | null>(null)
+const saving = ref(false)
+const saved = ref('') // feedback after a download
+const saveItems = computed<MenuItem<SaveKind>[]>(() => [
+  { value: 'full', label: source.value ? 'Logs completos desta fonte' : 'Logs completos (direto do cluster)' },
+  { value: 'screen', label: `O que está na tela (${visible.value.length} linhas)` },
+])
+
+function fileName() {
+  const d = new Date()
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}`
+  const t = source.value ? props.targets.find((x) => keyOf({ p: x.pod, c: x.container }) === source.value) : props.targets[0]
+  const base = !t ? 'logs' : multi.value && !source.value ? t.pod.replace(/-[a-z0-9]{5}$/, '') : `${t.pod}_${t.container}`
+  return `${base}${previous.value ? '_anterior' : ''}_${stamp}.log`
+}
+
+async function save(kind: SaveKind) {
+  saving.value = true
+  saved.value = ''
+  try {
+    if (kind === 'full') {
+      const targets = source.value ? props.targets.filter((t) => `${t.pod}/${t.container}` === source.value) : props.targets
+      const r = await SaveLogs(props.cluster, stream.LogOptions.createFrom({
+        namespace: props.namespace, targets, tailLines: 0, sinceSeconds: 0,
+        timestamps: timestamps.value, previous: previous.value, follow: false,
+      }), fileName())
+      if (r.path) saved.value = `Salvo: ${r.path} (${r.lines} linhas)`
+    } else {
+      const text = visible.value.map((l) => (multi.value ? `[${label(l)}] ${l.t}` : l.t)).join('\n') + '\n'
+      const path = await SaveText(fileName(), text)
+      if (path) saved.value = `Salvo: ${path} (${visible.value.length} linhas)`
+    }
+  } catch (e) {
+    saved.value = `Erro ao salvar: ${e}`
+  } finally {
+    saving.value = false
+  }
+}
+
 const statusText: Record<string, string> = { idle: 'parado', streaming: 'ao vivo', ended: 'encerrado', error: 'erro' }
 </script>
 
@@ -85,7 +130,13 @@ const statusText: Record<string, string> = { idle: 'parado', streaming: 'ao vivo
       <label title="Logs da execução anterior (antes do último reinício)"><input v-model="previous" type="checkbox" /> anterior</label>
       <label><input v-model="follow" type="checkbox" /> seguir</label>
       <span v-if="note" class="text-amber-300/90">{{ note }}</span>
+      <span v-if="saved" class="max-w-96 truncate select-text" :class="saved.startsWith('Erro') ? 'text-rose-400' : 'text-emerald-400/90'" :title="saved">{{ saved }}</span>
       <span class="ml-auto">{{ visible.length }} linhas · {{ statusText[status] ?? status }}</span>
+      <button
+        class="flex items-center gap-1 rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-50"
+        :disabled="saving" title="Baixar logs"
+        @click="saveMenu = { x: $event.clientX, y: $event.clientY }"
+      ><Icon name="download" :size="13" />{{ saving ? 'Baixando…' : 'Baixar' }}</button>
       <span v-if="error" class="truncate text-rose-400" :title="error">{{ error }}</span>
     </div>
     <div ref="scrollEl" class="min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-[18px]" @scroll.passive="onScroll">
@@ -99,5 +150,6 @@ const statusText: Record<string, string> = { idle: 'parado', streaming: 'ao vivo
         </div>
       </div>
     </div>
+    <ContextMenu v-if="saveMenu" :x="saveMenu.x" :y="saveMenu.y" :items="saveItems" title="Baixar logs" @select="save" @close="saveMenu = null" />
   </div>
 </template>
