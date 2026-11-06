@@ -6,6 +6,14 @@ export function ActiveSubscriptions() {
   return window['go']['api']['StreamAPI']['ActiveSubscriptions']();
 }
 
+export function SaveLogs(arg1, arg2, arg3) {
+  return window['go']['api']['StreamAPI']['SaveLogs'](arg1, arg2, arg3);
+}
+
+export function SaveText(arg1, arg2) {
+  return window['go']['api']['StreamAPI']['SaveText'](arg1, arg2);
+}
+
 export function StreamLogs(arg1, arg2, arg3) {
   return window['go']['api']['StreamAPI']['StreamLogs'](arg1, arg2, arg3);
 }

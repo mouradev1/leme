@@ -28,14 +28,29 @@ export const actionIcon: Partial<Record<RowAction, string>> = {
 export const isKind = (k: resources.Ref, group: string, resource: string) =>
   k.group === group && k.resource === resource
 
+// Whether a workload row has pods to show logs for, from the server table's
+// cells (fixed layout for built-in kinds). Unknown layout: assume it has.
+function hasPods(k: resources.Kind, row: Row): boolean {
+  const num = (v: unknown) => (/^\d+$/.test(String(v)) ? Number(v) : NaN)
+  if (isKind(k, 'apps', 'replicasets') || isKind(k, 'apps', 'daemonsets')) {
+    const current = num(row.cells[2]) // Name, Desired, Current, Ready...
+    return Number.isNaN(current) || current > 0
+  }
+  if (isKind(k, 'apps', 'deployments') || isKind(k, 'apps', 'statefulsets')) {
+    const m = /^\d+\/(\d+)$/.exec(String(row.cells[1])) // Ready "1/3": desired after the slash
+    return !m || Number(m[1]) > 0
+  }
+  return true // Jobs keep their finished pods' logs
+}
+
 /** Kind-specific quick actions (the generic ones are always appended). */
 export function actionsFor(k: resources.Kind, row: Row): RowAction[] {
   const specific: RowAction[] = []
   if (isKind(k, '', 'pods')) specific.push('logs', 'shell', 'portforward')
   if (isKind(k, '', 'services')) specific.push('portforward')
-  if (isKind(k, 'apps', 'deployments') || isKind(k, 'apps', 'statefulsets')) specific.push('logs', 'scale', 'restart')
-  if (isKind(k, 'apps', 'daemonsets')) specific.push('logs', 'restart')
-  if (isKind(k, 'apps', 'replicasets') || isKind(k, 'batch', 'jobs')) specific.push('logs')
+  if (isKind(k, 'apps', 'deployments') || isKind(k, 'apps', 'statefulsets')) specific.push(...(hasPods(k, row) ? ['logs' as const] : []), 'scale', 'restart')
+  if (isKind(k, 'apps', 'daemonsets')) specific.push(...(hasPods(k, row) ? ['logs' as const] : []), 'restart')
+  if ((isKind(k, 'apps', 'replicasets') || isKind(k, 'batch', 'jobs')) && hasPods(k, row)) specific.push('logs')
   if (isKind(k, '', 'nodes')) {
     const cordoned = row.cells.some((c) => String(c).includes('SchedulingDisabled'))
     specific.push('nodeshell', cordoned ? 'uncordon' : 'cordon', 'drain')

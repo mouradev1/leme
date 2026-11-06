@@ -70,3 +70,35 @@ func TestFriendlyPortInUse(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+type nopBus struct{ n int }
+
+func (b *nopBus) Emit(string, any) { b.n++ }
+
+// Disconnecting a cluster stops only that cluster's forwards.
+func TestStopCluster(t *testing.T) {
+	bus := &nopBus{}
+	m := NewManager(bus)
+	cancelled := map[string]bool{}
+	add := func(id, cl string) {
+		m.all[id] = &entry{Forward: Forward{ID: id, Cluster: cl}, cancel: func() { cancelled[id] = true }}
+	}
+	add("a", "prod")
+	add("b", "dev")
+	add("c", "prod")
+
+	m.StopCluster("prod")
+	if !cancelled["a"] || !cancelled["c"] || cancelled["b"] {
+		t.Fatalf("cancelled = %v, want a and c only", cancelled)
+	}
+	if got := m.List(); len(got) != 1 || got[0].ID != "b" {
+		t.Fatalf("remaining = %+v, want only b", got)
+	}
+	if bus.n != 1 {
+		t.Fatalf("changed emitted %d times, want 1", bus.n)
+	}
+	m.StopCluster("nope")
+	if bus.n != 1 {
+		t.Fatal("no-op StopCluster should not emit")
+	}
+}

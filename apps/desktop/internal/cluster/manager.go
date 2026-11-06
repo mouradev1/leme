@@ -164,11 +164,15 @@ func (m *Manager) ReapIdle(maxIdle time.Duration) []string {
 // Disconnect closes a session, cancelling every watch/log/exec stream under it.
 func (m *Manager) Disconnect(name string) {
 	m.mu.Lock()
-	if s := m.sessions[name]; s != nil {
+	s := m.sessions[name]
+	if s != nil {
 		s.Close()
 		delete(m.sessions, name)
 	}
 	m.mu.Unlock()
+	if s != nil {
+		m.bus.Emit(TopicContextsChanged, m.Contexts()) // "connected" dot goes away
+	}
 }
 
 func (m *Manager) Close() {

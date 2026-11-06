@@ -18,6 +18,9 @@ const notes = computed(() => {
   const body = props.info.notes ?? ''
   const i = body.indexOf("## What's Changed")
   const text = (i >= 0 ? body.slice(i + "## What's Changed".length) : body)
+    .replace(/^#+\s*(Install|Download)[^\n]*\n[\s\S]*?(?=^#|$(?![\s\S]))/gim, '') // install table: not news
+    .replace(/^\s*\|.*\|\s*$/gm, '') // leftover markdown tables
+    .replace(/\n{3,}/g, '\n\n')
     .replace(/\*\*Full Changelog\*\*.*$/s, '')
     .replace(/^#+\s*/gm, '')
     .replace(/\bby @[\w-]+ in https:\/\/\S+/g, '')

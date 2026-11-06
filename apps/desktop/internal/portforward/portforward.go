@@ -168,6 +168,25 @@ func (m *Manager) Stop(id string) {
 	}
 }
 
+// StopCluster ends every forward of one cluster (it is being disconnected).
+func (m *Manager) StopCluster(cluster string) {
+	m.mu.Lock()
+	var stopped []*entry
+	for id, e := range m.all {
+		if e.Cluster == cluster {
+			delete(m.all, id)
+			stopped = append(stopped, e)
+		}
+	}
+	m.mu.Unlock()
+	for _, e := range stopped {
+		e.cancel()
+	}
+	if len(stopped) > 0 {
+		m.changed()
+	}
+}
+
 func (m *Manager) StopAll() {
 	m.mu.Lock()
 	all := m.all
