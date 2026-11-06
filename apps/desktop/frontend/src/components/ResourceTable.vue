@@ -298,6 +298,18 @@ function onKey(e: KeyboardEvent) {
   else selectedUid.value = ''
 }
 onMounted(() => window.addEventListener('keydown', onKey))
+
+// A click on the empty part of the list (below the rows) closes the side panel,
+// like Esc. Rows, the header, buttons and the scrollbars keep their own clicks.
+function onBlankClick(e: MouseEvent) {
+  const el = e.target as HTMLElement
+  if (el.closest('[data-row],[data-header],button,a,input')) return
+  const box = scrollEl.value
+  if (box && el === box && (e.offsetX >= box.clientWidth || e.offsetY >= box.clientHeight)) return // scrollbar
+  if (window.getSelection()?.toString()) return // finishing a text selection
+  peek.value = null
+  selectedUid.value = ''
+}
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
@@ -332,10 +344,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div v-if="error" class="border-b border-rose-900/50 bg-rose-950/40 px-4 py-1.5 text-xs text-rose-300">{{ error }}</div>
 
       <!-- Grid -->
-      <div ref="scrollEl" class="min-h-0 flex-1 overflow-auto text-[13px]">
+      <div ref="scrollEl" class="min-h-0 flex-1 overflow-auto text-[13px]" @click="onBlankClick">
         <div :style="{ minWidth }">
           <div
-            v-for="hg in table.getHeaderGroups()" :key="hg.id" :style="gridStyle"
+            v-for="hg in table.getHeaderGroups()" :key="hg.id" :style="gridStyle" data-header
             class="sticky top-0 z-10 h-9 items-center border-b border-zinc-800 bg-zinc-925/95 text-[11px] font-medium text-zinc-400 backdrop-blur"
           >
             <div
@@ -351,7 +363,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
           <div class="relative" :style="{ height: `${virtualizer.getTotalSize()}px` }">
             <div
-              v-for="v in virtualizer.getVirtualItems()" :key="tableRows[v.index].id"
+              v-for="v in virtualizer.getVirtualItems()" :key="tableRows[v.index].id" data-row
               class="absolute inset-x-0 cursor-default items-center border-b border-zinc-800/50"
               :class="tableRows[v.index].id === selectedUid
                 ? 'bg-sky-500/10 shadow-[inset_2px_0_0_var(--color-sky-400)]'
