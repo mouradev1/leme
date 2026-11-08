@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"os"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -18,9 +20,11 @@ import (
 	"leme/internal/cluster"
 	"leme/internal/platform/desktopinstall"
 	"leme/internal/platform/events"
+	"leme/internal/platform/secrets"
 	"leme/internal/platform/settings"
 	"leme/internal/platform/shellenv"
 	"leme/internal/portforward"
+	"leme/internal/rancher"
 	"leme/internal/stream"
 	"leme/internal/terminal"
 )
@@ -72,9 +76,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	ranchers := rancher.NewManager(bus, clusters, secrets.Default())
+	ranchers.Start()                                     // saved Rancher servers' clusters show up right away
+	clusters.RequireExecApproval(func(cmd string) bool { // kubeconfig commands run only once allowed
+		return slices.Contains(settings.Load().ApprovedExec, cmd)
+	})
+	clusters.OnUnauthorized(func(ctx string) { // a Rancher token expired mid-session
+		if u, _, ok := ranchers.Owner(ctx); ok {
+			ranchers.MarkExpired(u)
+		}
+	})
+	go func() { // refresh Rancher cluster lists in the background (new clusters appear)
+		time.Sleep(3 * time.Second)
+		ranchers.RefreshAll(context.Background())
+	}()
 	app := api.New(&api.Deps{
 		Bus:       bus,
 		Clusters:  clusters,
+		Rancher:   ranchers,
 		Hub:       stream.NewHub(),
 		Terminals: terminal.NewManager(bus),
 		Forwards:  portforward.NewManager(bus),
