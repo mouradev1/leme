@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { tr } from '@/lib/i18n'
+import { clusterBg, clusterInitials, clusterLabel, isProd, isReadOnly, loadPrefs, setPrefs } from '@/lib/guard'
+import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
+import { confirmKey, toastKey } from '@/lib/confirm'
 import { storeToRefs } from 'pinia'
 import { Cordon, Delete, Drain, PodContainers, Restart, Scale, WorkloadPods } from '../wailsjs/go/api/ResourceAPI'
 import { Unsubscribe } from '../wailsjs/go/api/StreamAPI'
@@ -30,16 +33,22 @@ import { CheckUpdate } from '../wailsjs/go/api/AppAPI'
 import { ClipboardSetText } from '../wailsjs/runtime/runtime'
 import type { update } from '../wailsjs/go/models'
 import Icon from '@/components/Icon.vue'
+import CommandPalette, { type PaletteItem } from '@/components/CommandPalette.vue'
+import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
+import SettingsDialog from '@/components/SettingsDialog.vue'
+import ClusterLabelDialog from '@/components/ClusterLabelDialog.vue'
+import { objects } from '@/lib/recents'
+import { donate } from '@/lib/donate'
 import { useClusters } from '@/stores/clusters'
 import { usePanelWidth } from '@/lib/resize'
 import { errMsg, newId, on } from '@/lib/bridge'
-import { hue, initials } from '@/lib/dom'
 import type { DockTab, NavigateTarget, NewDockTab, Row, RowAction, View } from '@/lib/types'
 
 const store = useClusters()
 const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs(store)
 onMounted(() => {
-  store.load()
+  void store.load().finally(() => window.dispatchEvent(new Event('leme:ready')))
+  void loadPrefs()
   trackForwards()
   // New-version notice: a few seconds after startup, then again on the first
   // use of each new day (the app often stays open for days).
@@ -82,13 +91,14 @@ async function checkUpdateNow() {
     const i = await CheckUpdate(false)
     updateInfo.value = i
     if (i.available) showUpdate.value = true
-    else flash(i.latest ? `Você está na versão mais recente (v${i.latest}).` : 'Nenhuma versão publicada ainda.')
+    else flash(i.latest ? tr('Você está na versão mais recente (v{a}).', { a: i.latest }) : tr('Nenhuma versão publicada ainda.'))
   } catch (e) {
-    flash(`Não foi possível verificar atualizações: ${errMsg(e)}`)
+    flash(tr('Não foi possível verificar atualizações: {a}', { a: errMsg(e) }))
   }
 }
 
 const showKubeconfigs = ref(false)
+const rancherKeyFor = ref('') // open the clusters dialog on this Rancher's API key field
 const toast = ref('')
 let toastTimer = 0
 function flash(msg: string) {
@@ -208,12 +218,12 @@ function openMainMenu(e: MouseEvent, pane: number, id: string) {
   if (!w || !t) return
   const isDock = t.view.type === 'dock'
   const items: MenuItem<string>[] = []
-  if (w.panes.length > 1) items.push({ value: 'move', label: 'Mover para o outro painel' })
-  else if (w.panes[0].tabs.length > 1) items.push({ value: 'beside', label: 'Abrir ao lado' })
+  if (w.panes.length > 1) items.push({ value: 'move', label: tr('Mover para o outro painel') })
+  else if (w.panes[0].tabs.length > 1) items.push({ value: 'beside', label: tr('Abrir ao lado') })
   if (!isDock) items.push({ value: 'dup', label: 'Duplicar aba' })
-  if (isDock) items.push({ value: 'dock', label: 'Voltar para o dock' })
-  items.push({ value: 'close', label: 'Fechar aba', separatorBefore: true })
-  if (w.panes[pane].tabs.length > 1) items.push({ value: 'others', label: 'Fechar as outras abas' })
+  if (isDock) items.push({ value: 'dock', label: tr('Voltar para o dock') })
+  items.push({ value: 'close', label: tr('Fechar aba'), separatorBefore: true })
+  if (w.panes[pane].tabs.length > 1) items.push({ value: 'others', label: tr('Fechar as outras abas') })
   tabMenu.value = {
     x: e.clientX, y: e.clientY, title: tabLabel(t).title, items,
     run: (v) => {
@@ -231,15 +241,23 @@ function openClusterMenu(e: MouseEvent, name: string) {
   const c = contexts.value.find((x) => x.name === name)
   if (!c) return
   const items: MenuItem<string>[] = []
-  if (!c.connected) items.push({ value: 'connect', label: 'Conectar' })
-  else if (name !== active.value) items.push({ value: 'connect', label: 'Abrir' })
-  if (c.connected) items.push({ value: 'disconnect', label: 'Desconectar', danger: true, separatorBefore: items.length > 0 })
-  items.push({ value: 'copy', label: 'Copiar nome', separatorBefore: true })
+  if (!c.connected) items.push({ value: 'connect', label: tr('Conectar') })
+  else if (name !== active.value) items.push({ value: 'connect', label: tr('Abrir') })
+  if (c.connected) items.push({ value: 'disconnect', label: tr('Desconectar'), danger: true, separatorBefore: items.length > 0 })
+  items.push(
+    { value: 'label', label: tr('Nome e cor…'), separatorBefore: true },
+    { value: 'prod', label: isProd(name) ? tr('Desmarcar produção') : tr('Marcar como produção') },
+    { value: 'ro', label: isReadOnly(name) ? tr('Permitir alterações') : tr('Somente leitura') },
+    { value: 'copy', label: tr('Copiar nome'), separatorBefore: true },
+  )
   tabMenu.value = {
     x: e.clientX, y: e.clientY, title: name, items,
     run: (v) => {
       if (v === 'connect') void openCluster(name)
       else if (v === 'disconnect') disconnectCluster(name)
+      else if (v === 'label') labelFor.value = name
+      else if (v === 'prod') void setPrefs(name, { production: !isProd(name) }).then(() => flash(isProd(name) ? tr('{a} marcado como produção', { a: name }) : tr('{a} não é mais produção', { a: name })))
+      else if (v === 'ro') void setPrefs(name, { readOnly: !isReadOnly(name) }).then(() => flash(isReadOnly(name) ? tr('{a} em somente leitura', { a: name }) : tr('{a} aceita alterações', { a: name })))
       else if (v === 'copy') void ClipboardSetText(name)
     },
   }
@@ -254,13 +272,13 @@ function disconnectCluster(name: string) {
     for (const t of streams) closeTab(t.id)
     if (editing.value?.cluster === name) editing.value = null
     await store.disconnect(name)
-    flash(`Desconectado de ${name}`)
+    flash(tr('Desconectado de {a}', { a: name }))
   }
   const parts = [
-    streams.length && `${streams.length} aba(s) de logs/terminal`,
+    streams.length && tr('{a} aba(s) de logs/terminal', { a: streams.length }),
     fwds.length && `${fwds.length} port-forward(s)`,
   ].filter(Boolean)
-  if (parts.length) confirm(`Desconectar de ${name}? Isso fecha ${parts.join(' e ')}.`, run)
+  if (parts.length) confirm(tr('Desconectar de {a}? Isso fecha {b}.', { a: name, b: parts.join(' e ') }), run)
   else void run().catch((e) => flash(errMsg(e)))
 }
 
@@ -271,9 +289,9 @@ function openDockMenu(e: MouseEvent, id: string) {
   tabMenu.value = {
     x: e.clientX, y: e.clientY, title: d.title,
     items: [
-      { value: 'main', label: 'Abrir na área principal' },
-      ...(w.panes.length === 1 ? [{ value: 'beside', label: 'Abrir ao lado' }] : []),
-      { value: 'close', label: 'Fechar', separatorBefore: true },
+      { value: 'main', label: tr('Abrir na área principal') },
+      ...(w.panes.length === 1 ? [{ value: 'beside', label: tr('Abrir ao lado') }] : []),
+      { value: 'close', label: tr('Fechar'), separatorBefore: true },
     ],
     run: (v) => {
       if (v === 'main') placeDock(w, w.focus, id)
@@ -292,10 +310,10 @@ watch(active, () => (editing.value = null))
 // A link (Controlled By, Namespace...) opens in the pane it was clicked in.
 function navigate(t: NavigateTarget, pane?: number) {
   const k = store.findKind(t.kind)
-  if (!k) return flash(`Tipo ${t.kind} não encontrado neste cluster`)
+  if (!k) return flash(tr('Tipo {a} não encontrado neste cluster', { a: t.kind }))
   const w = ws.value
   if (!w) return
-  setView(w, pane ?? w.focus, { type: 'resource', kind: k }, t.search ?? '')
+  setView(w, pane ?? w.focus, { type: 'resource', kind: k }, t.search ?? '', t.open && t.search ? `${t.namespace ?? ''}/${t.search}` : undefined)
   editing.value = null
   if (t.namespace && k.namespaced && selectedNamespaces.value.length && !selectedNamespaces.value.includes(t.namespace)) {
     selectedNamespaces.value = [t.namespace]
@@ -310,6 +328,90 @@ function createTemplate(k: resources.Kind): string {
   const body = k.kind === 'ConfigMap' || k.kind === 'Secret' ? 'data:\n  chave: valor' : 'spec: {}'
   return `# Novo ${k.kind}: ajuste o manifesto e clique em Apply (⌘S).\n# Use "Diff" para validar no servidor antes (dry-run).\napiVersion: ${apiVersion}\nkind: ${k.kind}\nmetadata:\n  name: novo-${k.kind.toLowerCase()}\n${k.namespaced ? `  namespace: ${ns}\n` : ''}${body}\n`
 }
+
+// ---- Command palette (⌘K) and keyboard shortcuts --------------------------------
+const showPalette = ref(false)
+const showHelp = ref(false)
+const showSettings = ref(false)
+const labelFor = ref('') // cluster whose name/color is being edited
+const isMac = /Mac/i.test(navigator.platform)
+const mod = isMac ? '⌘' : 'Ctrl+'
+
+const paletteItems = computed<PaletteItem[]>(() => {
+  const out: PaletteItem[] = []
+  const c = active.value
+  const w = ws.value
+  const go = (v: View) => () => { view.value = v }
+  if (c && w) {
+    out.push(
+      { id: 'a:overview', group: tr('Ações'), label: tr('Visão geral'), icon: 'overview', run: go({ type: 'overview' }) },
+      { id: 'a:newtab', group: tr('Ações'), label: tr('Nova aba'), icon: 'plus', keys: `${mod}T`, run: () => openMainTab(w, w.focus, { type: 'overview' }) },
+      { id: 'a:split', group: tr('Ações'), label: w.panes.length > 1 ? tr('Juntar a tela') : tr('Dividir a tela'), icon: 'split', keys: `${mod}\\`, run: () => (w.panes.length > 1 ? unsplit(w) : split(w)) },
+      { id: 'a:term', group: tr('Ações'), label: tr('Terminal local neste cluster'), icon: 'terminal', run: newTerminal },
+      { id: 'a:helm', group: tr('Ações'), label: 'Helm releases', icon: 'list', run: go({ type: 'helm' }) },
+      { id: 'a:pf', group: tr('Ações'), label: tr('Port-forwards ativos'), icon: 'forward', run: go({ type: 'portforwards' }) },
+      { id: 'a:prod', group: tr('Ações'), label: isProd(c) ? tr('Desmarcar produção') : tr('Marcar este cluster como produção'), icon: 'ban', run: () => void setPrefs(c, { production: !isProd(c) }) },
+      { id: 'a:ro', group: tr('Ações'), label: isReadOnly(c) ? tr('Permitir alterações neste cluster') : tr('Somente leitura neste cluster'), icon: 'ban', run: () => void setPrefs(c, { readOnly: !isReadOnly(c) }) },
+    )
+    const obj = (o: { kind: string; name: string; namespace: string }) => () => navigate({ kind: o.kind, search: o.name, namespace: o.namespace, open: true })
+    for (const o of objects.pinned[c] ?? []) out.push({ id: `p:${o.kind}/${o.namespace}/${o.name}`, group: tr('Fixados'), label: o.name, sub: `${o.kind}${o.namespace ? ` · ${o.namespace}` : ''}`, icon: 'pin', run: obj(o) })
+    for (const o of objects.recent[c] ?? []) out.push({ id: `r:${o.kind}/${o.namespace}/${o.name}`, group: tr('Recentes'), label: o.name, sub: `${o.kind}${o.namespace ? ` · ${o.namespace}` : ''}`, icon: 'refresh', run: obj(o) })
+    for (const k of store.catalog) out.push({ id: `k:${k.group}/${k.resource}`, group: tr('Recursos'), label: k.kind, sub: k.group || 'core', icon: icons[k.category] ? k.category : 'list', run: go({ type: 'resource', kind: k }) })
+  }
+  out.push({ id: 'a:add', group: tr('Ações'), label: tr('Adicionar cluster (kubeconfig ou Rancher)'), icon: 'plus', run: () => { rancherKeyFor.value = ''; showKubeconfigs.value = true } })
+  out.push({ id: 'a:settings', group: tr('Ações'), label: tr('Ajustes'), sub: 'English / Português', icon: 'sliders', run: () => (showSettings.value = true) })
+  out.push({ id: 'a:coffee', group: tr('Ações'), label: tr('Pague um café'), sub: tr('apoie o projeto'), icon: 'coffee', run: donate })
+  out.push({ id: 'a:help', group: tr('Ações'), label: tr('Atalhos de teclado'), icon: 'keyboard', keys: '?', run: () => (showHelp.value = true) })
+  for (const x of contexts.value) if (x.name !== c) out.push({ id: `c:${x.name}`, group: tr('Clusters'), label: clusterLabel(x.name), sub: [clusterLabel(x.name) !== x.name ? x.name : '', x.connected ? tr('conectado') : ''].filter(Boolean).join(' · ') || undefined, icon: 'monitor', run: () => void openCluster(x.name) })
+  return out
+})
+
+function onPaletteObject(h: resources.SearchHit, logs: boolean) {
+  if (logs) {
+    const k = store.findKind(h.kind)
+    if (k) return void onAction('logs', { uid: '', name: h.name, namespace: h.namespace, cells: [] } as unknown as Row, k)
+  }
+  navigate({ kind: h.kind, search: h.name, namespace: h.namespace, open: true })
+}
+
+function selectTabAt(i: number) {
+  const w = ws.value
+  const p = w?.panes[w.focus]
+  if (p && p.tabs[i]) p.active = p.tabs[i].id
+}
+function cycleTab(step: number) {
+  const w = ws.value
+  const p = w?.panes[w.focus]
+  if (!p || !p.tabs.length) return
+  const i = p.tabs.findIndex((t) => t.id === p.active)
+  p.active = p.tabs[(i + step + p.tabs.length) % p.tabs.length].id
+}
+function onGlobalKey(e: KeyboardEvent) {
+  const modKey = isMac ? e.metaKey : e.ctrlKey
+  const k = e.key.toLowerCase()
+  const el = e.target as HTMLElement | null
+  const typing = !!el?.closest?.('input,textarea,select,[contenteditable],.monaco-editor,.xterm')
+  if (modKey && !e.shiftKey && k === 'k') { e.preventDefault(); showPalette.value = !showPalette.value; return }
+  if (showPalette.value || dialog.value) return
+  const w = ws.value
+  if (modKey && w) {
+    if (k === 't' && !e.shiftKey) { e.preventDefault(); openMainTab(w, w.focus, { type: 'overview' }); return }
+    if (k === 'w' && !e.shiftKey) {
+      e.preventDefault()
+      const p = w.panes[w.focus]
+      if (p?.active) closeMain(w.focus, p.active)
+      return
+    }
+    if (e.key === '\\') { e.preventDefault(); w.panes.length > 1 ? unsplit(w) : split(w); return }
+    if (/^[1-9]$/.test(e.key) && !e.shiftKey) { e.preventDefault(); selectTabAt(Number(e.key) - 1); return }
+    if (e.shiftKey && (e.key === ']' || e.key === '}')) { e.preventDefault(); cycleTab(1); return }
+    if (e.shiftKey && (e.key === '[' || e.key === '{')) { e.preventDefault(); cycleTab(-1); return }
+  }
+  if (!typing && !modKey && e.key === '?') { e.preventDefault(); showHelp.value = !showHelp.value }
+  else if (e.key === 'Escape' && showHelp.value) showHelp.value = false
+}
+onMounted(() => window.addEventListener('keydown', onGlobalKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 // ---- Dock --------------------------------------------------------------------
 const tabs = ref<DockTab[]>([])
@@ -348,13 +450,21 @@ watch(active, (c) => {
 const newTerminal = () => openTab({ id: newId(), type: 'shell', title: `local · ${active.value}` })
 
 // ---- Confirm / prompt dialog -------------------------------------------------
-const dialog = ref<{ title: string; input?: number; danger?: boolean; run: (n?: number) => Promise<void> } | null>(null)
+// typeName: production clusters ask for the cluster name before risky actions.
+const dialog = ref<{ title: string; input?: number; danger?: boolean; typeName?: string; run: (n?: number) => Promise<void> } | null>(null)
+const typed = ref('')
+watch(dialog, () => (typed.value = ''))
+const dialogReady = computed(() => !dialog.value?.typeName || typed.value.trim() === dialog.value.typeName)
 async function confirmDialog() {
   const d = dialog.value!
+  if (!dialogReady.value) return
   dialog.value = null
   try { await d.run(d.input) } catch (e) { flash(errMsg(e)) }
 }
-const confirm = (title: string, run: () => Promise<void>, danger = false) => (dialog.value = { title, run, danger })
+const confirm = (title: string, run: () => Promise<void>, danger = false) =>
+  (dialog.value = { title, run, danger, typeName: danger && isProd(active.value) ? active.value : undefined })
+provide(confirmKey, confirm)
+provide(toastKey, (m: string) => flash(m))
 // A pending confirmation (delete, drain, node shell...) belongs to the cluster
 // it was asked in: never let it be confirmed while looking at another cluster.
 watch(active, () => (dialog.value = null))
@@ -377,10 +487,10 @@ async function onAction(action: RowAction, row: Row, kind?: resources.Kind) {
         // Workload (Deployment, StatefulSet, DaemonSet, ReplicaSet, Job): all its pods.
         const w = await WorkloadPods(c, k, ns, row.name).catch((e) => (flash(errMsg(e)), null))
         if (!w) return
-        if (!w.targets?.length) return flash(`${k.kind} ${row.name} não tem pods no momento`)
+        if (!w.targets?.length) return flash(tr('{a} {b} não tem pods no momento', { a: k.kind, b: row.name }))
         openTab({
           id: newId(), type: 'logs', title: `${k.kind.toLowerCase()} ${row.name}`, namespace: ns, targets: w.targets,
-          note: w.total > w.targets.length ? `mostrando ${w.targets.length} de ${w.total} streams` : undefined,
+          note: w.total > w.targets.length ? tr('mostrando {a} de {b} streams', { a: w.targets.length, b: w.total }) : undefined,
         })
       }
       break
@@ -395,27 +505,28 @@ async function onAction(action: RowAction, row: Row, kind?: resources.Kind) {
       break
     case 'nodeshell':
       confirm(
-        `Abrir um shell root no node ${row.name}? O Leme cria um pod privilegiado temporário em kube-system nesse node (acesso total à máquina) e o remove ao fechar o terminal.`,
+        tr('Abrir um shell root no node {a}? O Leme cria um pod privilegiado temporário em kube-system nesse node (acesso total à máquina) e o remove ao fechar o terminal.', { a: row.name }),
         async () => openTab({ id: newId(), type: 'shell', title: `node ${row.name}`, node: row.name }),
         true,
       )
       break
     case 'delete':
-      confirm(`Excluir ${k.kind} ${row.name}?`, async () => { await Delete(c, k, ns, row.name, false); flash(`${row.name} excluído`) }, true)
+      confirm(tr('Excluir {a} {b}?', { a: k.kind, b: row.name }), async () => { await Delete(c, k, ns, row.name, false); flash(tr('{a} excluído', { a: row.name })) }, true)
       break
     case 'scale':
-      dialog.value = { title: `Escalar ${row.name} para quantas réplicas?`, input: 1,
-        run: async (n) => { await Scale(c, k, ns, row.name, n ?? 0); flash(`${row.name} → ${n} réplica(s)`) } }
+      dialog.value = { title: tr('Escalar {a} para quantas réplicas?', { a: row.name }), input: 1, typeName: isProd(c) ? c : undefined,
+        run: async (n) => { await Scale(c, k, ns, row.name, n ?? 0); flash(tr('{a} → {b} réplica(s)', { a: row.name, b: n })) } }
       break
     case 'restart':
-      confirm(`Reiniciar (rollout restart) ${row.name}?`, async () => { await Restart(c, k, ns, row.name); flash(`${row.name} reiniciando`) })
+      confirm(tr('Reiniciar (rollout restart) {a}?', { a: row.name }), async () => { await Restart(c, k, ns, row.name); flash(tr('{a} reiniciando', { a: row.name })) }, isProd(c))
       break
     case 'cordon':
     case 'uncordon':
-      await Cordon(c, row.name, action === 'cordon').then(() => flash(`${row.name}: ${action}`)).catch((e) => flash(errMsg(e)))
+      if (isProd(c)) confirm(tr('{a} no node {b}?', { a: action === 'cordon' ? 'Cordon' : 'Uncordon', b: row.name }), async () => { await Cordon(c, row.name, action === 'cordon'); flash(`${row.name}: ${action}`) }, true)
+      else await Cordon(c, row.name, action === 'cordon').then(() => flash(`${row.name}: ${action}`)).catch((e) => flash(errMsg(e)))
       break
     case 'drain':
-      confirm(`Drain do node ${row.name}? Todos os pods serão removidos (respeitando PDBs).`, async () => {
+      confirm(tr('Drain do node {a}? Todos os pods serão removidos (respeitando PDBs).', { a: row.name }), async () => {
         const id = newId()
         const off = on<{ type: string; message: string }>(`drain:${id}`, (ev) => {
           flash(ev.type === 'done' ? `${row.name} drenado` : ev.message)
@@ -441,22 +552,30 @@ function onContainer(action: 'logs' | 'previous' | 'shell', container: string, r
 }
 
 function bulkDelete(rows: Row[], k: resources.Kind) {
-  confirm(`Excluir ${rows.length} ${k.kind}(s)?`, async () => {
+  confirm(tr('Excluir {a} {b}(s)?', { a: rows.length, b: k.kind }), async () => {
     const res = await Promise.allSettled(rows.map((r) => Delete(active.value, k, r.namespace ?? '', r.name, false)))
     const failed = res.filter((r) => r.status === 'rejected').length
-    flash(failed ? `${rows.length - failed} excluído(s), ${failed} falha(s)` : `${rows.length} excluído(s)`)
+    flash(failed ? tr('{a} excluído(s), {b} falha(s)', { a: rows.length - failed, b: failed }) : tr('{a} excluído(s)', { a: rows.length }))
   }, true)
 }
 
 const editorPanel = usePanelWidth('editor', 640)
 
-const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamespaces.value.join(', ') : 'todos os namespaces'))
+const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamespaces.value.join(', ') : tr('todos os namespaces')))
 </script>
 
 <template>
   <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
+    <div
+      v-if="active && (isProd(active) || isReadOnly(active))"
+      class="flex h-5 shrink-0 items-center justify-center gap-2 text-[10px] font-semibold tracking-[0.18em] uppercase"
+      :class="isProd(active) ? 'bg-rose-700 text-rose-50' : 'bg-zinc-800 text-zinc-300'"
+    >
+      <span v-if="isProd(active)">{{ tr('Produção') }} · {{ clusterLabel(active) }}</span>
+      <span v-if="isReadOnly(active)">{{ isProd(active) ? '· ' : '' }}{{ tr('somente leitura') }}{{ isProd(active) ? '' : ` · ${active}` }}</span>
+    </div>
     <div class="flex min-h-0 flex-1">
-      <Sidebar v-model:view="view" @open-tab="openInNewTab" @cluster-menu="openClusterMenu" @add-kubeconfig="showKubeconfigs = true" @open-cluster="openCluster" :update-available="!!updateInfo?.available" @check-update="checkUpdateNow" />
+      <Sidebar v-model:view="view" @settings="showSettings = true" @open-tab="openInNewTab" @navigate="(n) => navigate(n)" @cluster-menu="openClusterMenu" @add-kubeconfig="rancherKeyFor = ''; showKubeconfigs = true" @rancher-key="(u) => { rancherKeyFor = u; showKubeconfigs = true }" @open-cluster="openCluster" :update-available="!!updateInfo?.available" @check-update="checkUpdateNow" />
 
       <main class="flex min-w-0 flex-1 flex-col">
         <div v-show="!dockMax" class="flex min-h-0 flex-1">
@@ -465,7 +584,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
               <template v-for="(p, pi) in ws.panes" :key="pi">
                 <div
                   v-if="pi > 0" class="relative z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize bg-zinc-800 transition-colors hover:bg-sky-500/50"
-                  title="Arraste para redimensionar (duplo clique: metade)" @mousedown="startSplitDrag" @dblclick="ws.ratio = 0.5"
+                  :title="tr('Arraste para redimensionar (duplo clique: metade)')" @mousedown="startSplitDrag" @dblclick="ws.ratio = 0.5"
                 />
                 <div class="flex min-w-0 flex-col" :style="paneStyle(pi)" @mousedown.capture="ws.focus = pi">
                   <TabStrip
@@ -486,6 +605,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
                           <ResourceTable
                             v-else-if="t.view.type === 'resource'" :key="`${active}|${t.view.kind.group}/${t.view.kind.resource}`"
                             v-model:search="t.search" :cluster="active" :kind="resourceKind(t)"
+                            :focus="t.focus" :focused="pi === ws!.focus" @focus-done="t.focus = undefined"
                             @action="(a, r, k) => onAction(a, r, k ?? resourceKind(t))" @bulk-delete="(rows) => bulkDelete(rows, resourceKind(t))"
                             @navigate="(n) => navigate(n, pi)" @container="onContainer"
                             @create="editing = { cluster: active, initialYaml: createTemplate(resourceKind(t)), key: newId() }"
@@ -495,8 +615,8 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
                     </template>
                     <div v-if="!p.tabs.length" class="grid h-full place-items-center text-sm text-zinc-500">
                       <div class="text-center">
-                        <p>Nenhuma aba aberta.</p>
-                        <button class="mt-2 text-sky-400 hover:underline" @click="openMainTab(ws!, pi, { type: 'overview' })">Abrir Overview</button>
+                        <p>{{ tr('Nenhuma aba aberta.') }}</p>
+                        <button class="mt-2 text-sky-400 hover:underline" @click="openMainTab(ws!, pi, { type: 'overview' })">{{ tr('Abrir Overview') }}</button>
                       </div>
                     </div>
 
@@ -508,7 +628,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
                         @dragover.prevent="($event.currentTarget as HTMLElement).classList.add('drop-hot')"
                         @dragleave="($event.currentTarget as HTMLElement).classList.remove('drop-hot')"
                         @drop.prevent="dropOnPane(pi, z)"
-                      >{{ z === 'beside' ? 'Abrir ao lado' : ws.panes.length > 1 ? 'Mover para este painel' : 'Abrir aqui' }}</div>
+                      >{{ z === 'beside' ? tr('Abrir ao lado') : ws.panes.length > 1 ? tr('Mover para este painel') : tr('Abrir aqui') }}</div>
                     </div>
                   </div>
                 </div>
@@ -518,24 +638,24 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
             <!-- Welcome -->
             <div v-else class="grid h-full place-items-center overflow-auto p-8">
               <div class="w-full max-w-3xl">
-                <h1 class="text-xl font-semibold text-zinc-100">Bem-vindo ao Leme</h1>
-                <p class="mt-1 text-sm text-zinc-500">Escolha um cluster para conectar. Nada é acessado até você clicar.</p>
+                <h1 class="text-xl font-semibold text-zinc-100">{{ tr('Bem-vindo ao Leme') }}</h1>
+                <p class="mt-1 text-sm text-zinc-500">{{ tr('Escolha um cluster para conectar. Nada é acessado até você clicar.') }}</p>
                 <div class="mt-6 grid gap-3 sm:grid-cols-2">
                   <button
                     v-for="c in contexts" :key="c.name"
                     class="group flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-left transition hover:border-sky-700 hover:bg-zinc-900"
                     @click="openCluster(c.name)" @contextmenu.prevent="openClusterMenu($event, c.name)"
                   >
-                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white" :style="{ background: `hsl(${hue(c.name)} 55% 42%)` }">{{ initials(c.name) }}</span>
+                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white" :class="isProd(c.name) && 'ring-2 ring-rose-600 ring-offset-2 ring-offset-zinc-950'" :style="{ background: clusterBg(c.name) }">{{ clusterInitials(c.name) }}</span>
                     <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm text-zinc-100">{{ c.name }}</span>
+                      <span class="block truncate text-sm text-zinc-100" :title="c.name">{{ clusterLabel(c.name) }}</span>
                       <span class="block truncate text-xs text-zinc-500">{{ c.server }}</span>
                       <span class="mt-0.5 inline-block rounded bg-zinc-800 px-1.5 text-[10px] text-zinc-400">{{ c.auth }}</span>
                     </span>
                     <span v-if="connecting === c.name" class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-400" />
                   </button>
                   <button class="flex items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-700 p-3 text-sm text-zinc-400 hover:border-sky-700 hover:text-sky-300" @click="showKubeconfigs = true">
-                    <Icon name="plus" /> Adicionar cluster
+                    <Icon name="plus" /> {{ tr('Adicionar cluster') }}
                   </button>
                 </div>
               </div>
@@ -546,13 +666,13 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
             <div
               class="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize transition-colors hover:bg-sky-500/40"
               :class="editorPanel.dragging.value && 'bg-sky-500/60'"
-              title="Arraste para redimensionar (duplo clique: tamanho padrão)"
+              :title="tr('Arraste para redimensionar (duplo clique: tamanho padrão)')"
               @mousedown="editorPanel.start" @dblclick="editorPanel.reset"
             />
             <YamlEditor
               :key="editing.key" :cluster="editing.cluster" :kind="editing.kind" :namespace="editing.namespace"
               :name="editing.name" :initial-yaml="editing.initialYaml"
-              @close="editing = null" @applied="flash('Aplicado com sucesso')"
+              @close="editing = null" @applied="flash(tr('Aplicado com sucesso'))"
             />
           </section>
         </div>
@@ -571,10 +691,10 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
         <span class="flex items-center gap-1.5 text-zinc-300"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />{{ active }}</span>
         <span>{{ server?.version }}</span>
         <span class="truncate">{{ server?.server }}</span>
-        <button v-if="forwards.length" class="hover:text-sky-300" title="Port-forwards ativos" @click="view = { type: 'portforwards' }">{{ forwards.length }} port-forward{{ forwards.length > 1 ? 's' : '' }}</button>
+        <button v-if="forwards.length" class="hover:text-sky-300" :title="tr('Port-forwards ativos')" @click="view = { type: 'portforwards' }">{{ forwards.length }} port-forward{{ forwards.length > 1 ? 's' : '' }}</button>
         <span class="ml-auto truncate">{{ nsLabel }}</span>
       </template>
-      <span v-else>desconectado</span>
+      <span v-else>{{ tr('desconectado') }}</span>
     </footer>
 
     <!-- Dock streams: rendered once into stable hosts, shown in the dock or a pane.
@@ -587,23 +707,42 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
 
     <PortForwardDialog
       v-if="forwardRequest" :target="forwardRequest" @close="forwardRequest = null"
-      @started="(f) => flash(`Encaminhando ${forwardURL(f)} (endereço copiado)`)"
+      @started="(f) => flash(tr('Encaminhando {a} (endereço copiado)', { a: forwardURL(f) }))"
     />
+    <CommandPalette
+      v-if="showPalette" :items="paletteItems" :cluster="active" :namespaces="selectedNamespaces"
+      @close="showPalette = false" @object="onPaletteObject"
+    />
+    <ShortcutsHelp v-if="showHelp" @close="showHelp = false" />
+    <SettingsDialog v-if="showSettings" @close="showSettings = false" />
+    <ClusterLabelDialog v-if="labelFor" :cluster="labelFor" @close="labelFor = ''" />
     <UpdateDialog v-if="showUpdate && updateInfo" :info="updateInfo" @close="showUpdate = false" />
-    <KubeconfigManager v-if="showKubeconfigs" @close="showKubeconfigs = false" @changed="store.load()" @connect="openCluster" />
+    <KubeconfigManager v-if="showKubeconfigs" :rancher="rancherKeyFor || undefined" @close="showKubeconfigs = false; rancherKeyFor = ''" @changed="store.load()" @connect="openCluster" />
 
     <!-- Dialog -->
     <div v-if="dialog" class="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-[2px]" @click.self="dialog = null">
       <div class="w-[420px] rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-sm shadow-2xl">
+        <p v-if="dialog.typeName" class="mb-2 text-[11px] font-semibold tracking-wider text-rose-400 uppercase">{{ tr('Cluster de produção') }}</p>
         <p class="mb-4 text-zinc-100">{{ dialog.title }}</p>
         <input
           v-if="dialog.input !== undefined" v-model.number="dialog.input" type="number" min="0" autofocus
           class="mb-4 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 outline-none focus:border-sky-600"
           @keydown.enter="confirmDialog"
         />
+        <label v-if="dialog.typeName" class="mb-4 block text-xs text-zinc-400">
+          {{ tr('Digite') }} <span class="font-mono text-zinc-100 select-text">{{ dialog.typeName }}</span> {{ tr('para confirmar') }}
+          <input
+            v-model="typed" autofocus spellcheck="false" autocomplete="off"
+            class="mt-1.5 w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-sm outline-none focus:border-rose-600"
+            @keydown.enter="confirmDialog"
+          />
+        </label>
         <div class="flex justify-end gap-2">
-          <button class="rounded-md bg-zinc-800 px-3 py-1.5 hover:bg-zinc-700" @click="dialog = null">Cancelar</button>
-          <button class="rounded-md px-3 py-1.5 text-white" :class="dialog.danger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-sky-600 hover:bg-sky-500'" @click="confirmDialog">Confirmar</button>
+          <button class="rounded-md bg-zinc-800 px-3 py-1.5 hover:bg-zinc-700" @click="dialog = null">{{ tr('Cancelar') }}</button>
+          <button
+            class="rounded-md px-3 py-1.5 text-white disabled:opacity-40" :disabled="!dialogReady"
+            :class="dialog.danger || dialog.typeName ? 'bg-rose-600 hover:bg-rose-500' : 'bg-sky-600 hover:bg-sky-500'" @click="confirmDialog"
+          >{{ tr('Confirmar') }}</button>
         </div>
       </div>
     </div>

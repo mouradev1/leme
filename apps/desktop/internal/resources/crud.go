@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"leme/internal/platform/i18n"
 	"sort"
 	"strings"
 
@@ -68,7 +69,7 @@ func Apply(ctx context.Context, s *cluster.Session, doc string, o ApplyOptions) 
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return res, fmt.Errorf("YAML inválido: %w", err)
+			return res, fmt.Errorf(i18n.T("YAML inválido: %w", "invalid YAML: %w"), err)
 		}
 		if len(obj.Object) == 0 {
 			continue // empty document between "---"
@@ -130,7 +131,7 @@ func applyOne(ctx context.Context, s *cluster.Session, obj *unstructured.Unstruc
 	if current != nil && err == nil {
 		if tools := externalManagers(current); len(tools) > 0 {
 			warnings = append(warnings, fmt.Sprintf(
-				"%s %q também é gerenciado por: %s. Se for uma ferramenta de deploy (pipeline de CI/CD, Argo CD, Flux, Helm), o próximo deploy dela pode desfazer esta alteração. Para mudar de forma permanente, altere também na origem (repositório, chart ou pipeline).",
+				i18n.T("%s %q também é gerenciado por: %s. Se for uma ferramenta de deploy (pipeline de CI/CD, Argo CD, Flux, Helm), o próximo deploy dela pode desfazer esta alteração. Para mudar de forma permanente, altere também na origem (repositório, chart ou pipeline).", "%s %q is also managed by: %s. If that is a deploy tool (CI/CD pipeline, Argo CD, Flux, Helm), its next deploy may undo this change. To change it for good, also change it at the source (repository, chart or pipeline)."),
 				obj.GetKind(), obj.GetName(), strings.Join(tools, ", ")))
 		}
 	}
@@ -168,11 +169,11 @@ func externalManagers(obj *unstructured.Unstructured) []string {
 func friendly(err error) error {
 	switch {
 	case apierrors.IsConflict(err):
-		return fmt.Errorf("o objeto foi alterado no cluster depois que você abriu o editor. Clique em Recarregar para ver a versão atual e refaça a alteração (assim nada de outra pessoa é sobrescrito)")
+		return errors.New(i18n.T(i18n.T("o objeto foi alterado no cluster depois que você abriu o editor. Clique em Recarregar para ver a versão atual e refaça a alteração (assim nada de outra pessoa é sobrescrito)", "the object changed in the cluster after you opened the editor. Click Reload to see the current version and redo your change (so nobody else's work is overwritten)"), "the object changed in the cluster after you opened the editor. Click Reload to see the current version and redo your change (so nobody else's work is overwritten)"))
 	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
 		return fmt.Errorf("o cluster recusou o YAML: %w", err)
 	case apierrors.IsForbidden(err):
-		return fmt.Errorf("sem permissão para alterar este objeto: %w", err)
+		return fmt.Errorf(i18n.T("sem permissão para alterar este objeto: %w", "no permission to change this object: %w"), err)
 	}
 	return err
 }

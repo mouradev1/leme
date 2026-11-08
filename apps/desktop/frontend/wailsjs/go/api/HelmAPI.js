@@ -22,6 +22,10 @@ export function Uninstall(arg1, arg2, arg3) {
   return window['go']['api']['HelmAPI']['Uninstall'](arg1, arg2, arg3);
 }
 
+export function Upgrade(arg1, arg2) {
+  return window['go']['api']['HelmAPI']['Upgrade'](arg1, arg2);
+}
+
 export function Values(arg1, arg2, arg3, arg4) {
   return window['go']['api']['HelmAPI']['Values'](arg1, arg2, arg3, arg4);
 }

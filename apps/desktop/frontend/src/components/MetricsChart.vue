@@ -4,6 +4,7 @@
  * separate charts). Requests/limits are reference lines with direct labels.
  * Hover = crosshair + tooltip. Plain SVG: no chart library in the bundle.
  */
+import { tr } from '@/lib/i18n'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { theme } from '@/lib/theme'
 
@@ -121,6 +122,6 @@ const tipLeft = computed(() => (hover.value ? Math.min(x(hover.value.t) + 10, wi
       <div class="text-zinc-400">{{ new Date(hover.t).toLocaleTimeString() }}</div>
       <div class="font-mono text-zinc-100">{{ format(hover.v) }}</div>
     </div>
-    <p v-if="!visible.length" class="absolute inset-0 grid place-items-center text-[11px] text-zinc-500">Coletando amostras… (a cada 15s)</p>
+    <p v-if="!visible.length" class="absolute inset-0 grid place-items-center text-[11px] text-zinc-500">{{ tr('Coletando amostras… (a cada 15s)') }}</p>
   </div>
 </template>

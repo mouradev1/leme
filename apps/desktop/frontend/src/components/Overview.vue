@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Cluster overview: nodes, pod phases, live usage and recent warnings. */
+import { tr } from '@/lib/i18n'
 import { computed, ref, toRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { resources } from '../../wailsjs/go/models'
@@ -9,6 +10,7 @@ import { useClusters } from '@/stores/clusters'
 import type { NavigateTarget } from '@/lib/types'
 import { bytes, cell, cpu } from '@/lib/format'
 import { statusTone, toneClass } from '@/lib/status'
+import { findProblems } from '@/lib/problems'
 
 const props = defineProps<{ cluster: string }>()
 const emit = defineEmits<{ navigate: [NavigateTarget] }>()
@@ -49,6 +51,16 @@ const nodeUsage = computed(() =>
   nodes.rows.value.map((r) => ({ name: r.name, u: usage.value.get(`/${r.name}`) })).sort((a, b) => (b.u?.cpu ?? 0) - (a.u?.cpu ?? 0)))
 const maxCpu = computed(() => Math.max(1, ...nodeUsage.value.map((n) => n.u?.cpu ?? 0)))
 
+// Pods that need attention, worst first (from the same live pods watch).
+const problems = computed(() => findProblems(pods.columns.value, pods.rows.value))
+const problemGroups = computed(() => {
+  const m = new Map<string, number>()
+  for (const p of problems.value) m.set(p.reason, (m.get(p.reason) ?? 0) + 1)
+  return [...m].sort((a, b) => b[1] - a[1])
+})
+const problemFilter = ref('')
+const shownProblems = computed(() => problems.value.filter((p) => !problemFilter.value || p.reason === problemFilter.value).slice(0, 100))
+
 const recentWarnings = computed(() => {
   const cols = warnings.columns.value
   const [iReason, iObj, iMsg, iSeen] = ['reason', 'object', 'message', 'last seen'].map((n) => colIdx(cols, n))
@@ -69,31 +81,57 @@ const recentWarnings = computed(() => {
 
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <button class="card text-left" @click="emit('navigate', { kind: 'Node' })">
-        <div class="card-label">Nodes</div>
+        <div class="card-label">{{ tr('Nodes') }}</div>
         <div class="card-value">{{ nodeReady }}<span class="text-base text-zinc-500"> / {{ nodes.rows.value.length }}</span></div>
-        <div class="text-[11px] text-zinc-500">prontos</div>
+        <div class="text-[11px] text-zinc-500">{{ tr('prontos') }}</div>
       </button>
       <button class="card text-left" @click="emit('navigate', { kind: 'Pod' })">
-        <div class="card-label">Pods</div>
+        <div class="card-label">{{ tr('Pods') }}</div>
         <div class="card-value">{{ pods.rows.value.length }}</div>
         <div class="truncate text-[11px] text-zinc-500">{{ podPhases.slice(0, 3).map(([s, n]) => `${n} ${s}`).join(' · ') }}</div>
       </button>
       <div class="card">
-        <div class="card-label">CPU em uso</div>
+        <div class="card-label">{{ tr('CPU em uso') }}</div>
         <div class="card-value">{{ available ? cpu(totals.cpu) : '—' }}</div>
-        <div class="text-[11px] text-zinc-500">{{ available ? 'soma dos nodes' : 'metrics-server ausente' }}</div>
+        <div class="text-[11px] text-zinc-500">{{ available ? tr('soma dos nodes') : tr('metrics-server ausente') }}</div>
       </div>
       <div class="card">
-        <div class="card-label">Memória em uso</div>
+        <div class="card-label">{{ tr('Memória em uso') }}</div>
         <div class="card-value">{{ available ? bytes(totals.mem) : '—' }}</div>
-        <div class="text-[11px] text-zinc-500">working set</div>
+        <div class="text-[11px] text-zinc-500">{{ tr('working set') }}</div>
       </div>
     </div>
 
+    <section class="card mt-5" :class="problems.length ? 'border-rose-900/60' : ''">
+      <h2 class="card-label mb-3 flex flex-wrap items-center gap-2">
+        {{ tr('Problemas agora') }}
+        <span v-if="problems.length" class="rounded-full bg-rose-500/15 px-1.5 text-rose-300">{{ problems.length }}</span>
+        <span v-else class="font-normal tracking-normal text-emerald-400 normal-case">{{ ns ? tr('nenhum pod com problema em {ns}', { ns }) : tr('nenhum pod com problema') }}</span>
+        <span class="ml-auto flex flex-wrap gap-1 font-normal tracking-normal normal-case">
+          <button
+            v-for="[r, n] in problemGroups" :key="r"
+            class="rounded px-1.5 py-0.5 text-[11px]" :class="problemFilter === r ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800/80 text-zinc-400 hover:text-zinc-100'"
+            @click="problemFilter = problemFilter === r ? '' : r"
+          >{{ r }} {{ n }}</button>
+        </span>
+      </h2>
+      <ul v-if="problems.length" class="max-h-80 divide-y divide-zinc-800/80 overflow-auto">
+        <li v-for="p in shownProblems" :key="p.uid">
+          <button class="flex w-full items-center gap-3 px-1 py-1.5 text-left text-xs hover:bg-zinc-800/50" :title="tr('Abrir o pod (o painel mostra a causa e o que fazer)')" @click="emit('navigate', { kind: 'Pod', search: p.name, namespace: p.namespace, open: true })">
+            <span class="h-2 w-2 shrink-0 rounded-full" :class="p.severity === 'critical' ? 'bg-rose-500' : 'bg-amber-400'" />
+            <span class="w-44 shrink-0 truncate font-medium" :class="p.severity === 'critical' ? 'text-rose-300' : 'text-amber-300'">{{ p.reason }}</span>
+            <span class="min-w-0 flex-1 truncate text-zinc-200">{{ p.name }}</span>
+            <span class="hidden min-w-0 truncate text-zinc-500 md:block md:max-w-72">{{ p.hint }}</span>
+            <span class="w-28 shrink-0 truncate text-right text-zinc-500">{{ p.namespace }}</span>
+          </button>
+        </li>
+      </ul>
+    </section>
+
     <div class="mt-5 grid gap-4 xl:grid-cols-[1fr_1.4fr]">
       <section class="card">
-        <h2 class="card-label mb-3">Uso por node</h2>
-        <div v-if="!available" class="text-xs text-zinc-500">Instale o metrics-server para ver uso em tempo real.</div>
+        <h2 class="card-label mb-3">{{ tr('Uso por node') }}</h2>
+        <div v-if="!available" class="text-xs text-zinc-500">{{ tr('Instale o metrics-server para ver uso em tempo real.') }}</div>
         <ul v-else class="space-y-2.5">
           <li v-for="n in nodeUsage" :key="n.name" class="text-xs">
             <div class="mb-1 flex justify-between gap-2">
@@ -105,7 +143,7 @@ const recentWarnings = computed(() => {
             </div>
           </li>
         </ul>
-        <h2 class="card-label mt-5 mb-2">Pods por status</h2>
+        <h2 class="card-label mt-5 mb-2">{{ tr('Pods por status') }}</h2>
         <div class="flex flex-wrap gap-1.5">
           <span v-for="[s, n] in podPhases" :key="s" class="rounded-md bg-zinc-800/80 px-2 py-1 text-xs">
             <span :class="toneClass[statusTone(s)]">{{ s }}</span> <span class="text-zinc-400 tabular-nums">{{ n }}</span>
@@ -115,9 +153,9 @@ const recentWarnings = computed(() => {
 
       <section class="card min-w-0">
         <h2 class="card-label mb-3 flex items-center gap-2">
-          Warnings recentes <span class="rounded-full bg-amber-500/15 px-1.5 text-amber-300">{{ warnings.rows.value.length }}</span>
+          {{ tr('Warnings recentes') }} <span class="rounded-full bg-amber-500/15 px-1.5 text-amber-300">{{ warnings.rows.value.length }}</span>
         </h2>
-        <p v-if="!recentWarnings.length" class="text-xs text-zinc-500">Nenhum warning no momento.</p>
+        <p v-if="!recentWarnings.length" class="text-xs text-zinc-500">{{ tr('Nenhum warning no momento.') }}</p>
         <ul class="max-h-[420px] space-y-1.5 overflow-auto">
           <li v-for="w in recentWarnings" :key="w.uid" class="rounded-md border-l-2 border-amber-500/70 bg-zinc-900/70 px-3 py-2 text-xs">
             <div class="flex gap-2">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Pod-specific body of the details panel: pod props, volumes, containers. */
+import { tr } from '@/lib/i18n'
 import { computed, ref, toRef } from 'vue'
 import type { pods } from '../../wailsjs/go/models'
 import { usePodMetrics } from '@/composables/usePodMetrics'
@@ -71,28 +72,28 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
     <!-- Pod properties -->
     <section class="border-b border-zinc-800/70 px-4 pt-1 pb-2">
       <div class="prop">
-        <span class="prop-k">Status</span>
+        <span class="prop-k">{{ tr('Status') }}</span>
         <span class="prop-v" :class="details.phase === 'Running' ? 'text-emerald-400' : details.phase === 'Pending' ? 'text-amber-300' : 'text-zinc-200'">
           {{ details.phase }}<template v-if="details.reason"> ({{ details.reason }})</template>
         </span>
       </div>
       <div v-if="details.node" class="prop">
-        <span class="prop-k">Node</span>
+        <span class="prop-k">{{ tr('Node') }}</span>
         <span class="prop-v"><button class="text-sky-400 hover:underline" @click="emit('navigate', { kind: 'Node', search: details.node })">{{ details.node }}</button></span>
       </div>
-      <div v-if="details.podIP" class="prop"><span class="prop-k">Pod IP</span><span class="prop-v font-mono select-text">{{ details.podIP }}</span></div>
+      <div v-if="details.podIP" class="prop"><span class="prop-k">{{ tr('Pod IP') }}</span><span class="prop-v font-mono select-text">{{ details.podIP }}</span></div>
       <div v-if="(details.podIPs ?? []).length > 1" class="prop">
-        <span class="prop-k">Pod IPs</span>
+        <span class="prop-k">{{ tr('Pod IPs') }}</span>
         <span class="prop-v flex flex-wrap gap-1"><span v-for="ip in details.podIPs" :key="ip" class="chip font-mono">{{ ip }}</span></span>
       </div>
       <div v-if="details.serviceAccount" class="prop">
-        <span class="prop-k">Service Account</span>
+        <span class="prop-k">{{ tr('Service Account') }}</span>
         <span class="prop-v"><button class="text-sky-400 hover:underline" @click="emit('navigate', { kind: 'ServiceAccount', search: details.serviceAccount, namespace })">{{ details.serviceAccount }}</button></span>
       </div>
-      <div class="prop"><span class="prop-k">QoS Class</span><span class="prop-v">{{ details.qosClass }}</span></div>
-      <div v-if="details.priorityClass" class="prop"><span class="prop-k">Priority Class</span><span class="prop-v">{{ details.priorityClass }}</span></div>
+      <div class="prop"><span class="prop-k">{{ tr('QoS Class') }}</span><span class="prop-v">{{ details.qosClass }}</span></div>
+      <div v-if="details.priorityClass" class="prop"><span class="prop-k">{{ tr('Priority Class') }}</span><span class="prop-v">{{ details.priorityClass }}</span></div>
       <div class="prop">
-        <span class="prop-k">Conditions</span>
+        <span class="prop-k">{{ tr('Conditions') }}</span>
         <span class="prop-v flex flex-wrap gap-1">
           <span
             v-for="c in details.conditions ?? []" :key="c.type" class="chip"
@@ -103,7 +104,7 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
       </div>
       <div v-if="(details.tolerations ?? []).length" class="prop">
         <button class="prop-k flex items-center gap-1 text-left hover:text-zinc-300" @click="toggle('tol')">
-          Tolerations <Icon name="chevron" :size="10" class="transition-transform" :class="open.has('tol') && 'rotate-90'" />
+          {{ tr('Tolerations') }} <Icon name="chevron" :size="10" class="transition-transform" :class="open.has('tol') && 'rotate-90'" />
         </button>
         <span class="prop-v">
           <template v-if="!open.has('tol')">{{ details.tolerations.length }}</template>
@@ -111,7 +112,7 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
         </span>
       </div>
       <div v-if="details.nodeSelector && Object.keys(details.nodeSelector).length" class="prop border-none">
-        <span class="prop-k">Node Selector</span>
+        <span class="prop-k">{{ tr('Node Selector') }}</span>
         <span class="prop-v flex flex-wrap gap-1"><span v-for="(v, k) in details.nodeSelector" :key="k" class="chip font-mono">{{ k }}={{ v }}</span></span>
       </div>
     </section>
@@ -119,7 +120,7 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
     <!-- Volumes -->
     <section v-if="(details.volumes ?? []).length" class="border-b border-zinc-800/70 px-4 py-3">
       <button class="flex w-full items-center gap-2 text-sm font-semibold text-zinc-100" @click="toggle('vol')">
-        Volumes <span class="rounded-full bg-zinc-800 px-1.5 text-[10px] font-normal text-zinc-400">{{ details.volumes.length }}</span>
+        {{ tr('Volumes') }} <span class="rounded-full bg-zinc-800 px-1.5 text-[10px] font-normal text-zinc-400">{{ details.volumes.length }}</span>
         <Icon name="chevron" :size="12" class="ml-auto text-zinc-500 transition-transform" :class="open.has('vol') && 'rotate-90'" />
       </button>
       <ul v-if="open.has('vol')" class="mt-2 space-y-1">
@@ -138,7 +139,7 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
     <!-- Containers -->
     <section class="px-4 py-3">
       <div class="mb-3 flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-zinc-100">Containers</h3>
+        <h3 class="text-sm font-semibold text-zinc-100">{{ tr('Containers') }}</h3>
         <div class="ml-auto flex items-center gap-1">
           <div class="flex overflow-hidden rounded-md border border-zinc-800">
             <button v-for="m in (['cpu', 'memory'] as const)" :key="m" class="px-2 py-1" :class="metric === m ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'" @click="metric = m">
@@ -151,7 +152,7 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
         </div>
       </div>
       <p class="mb-3 text-[11px] text-zinc-500">
-        Métricas do Kubernetes Metrics Server, coletadas a cada 15s desde que o painel foi aberto nesta sessão.
+        {{ tr('Métricas do Kubernetes Metrics Server, coletadas a cada 15s desde que o painel foi aberto nesta sessão.') }}
         <span v-if="metricsError" class="block text-amber-300/90">{{ metricsError }}</span>
       </p>
 
@@ -159,31 +160,31 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
         <header class="flex items-center gap-2 border-b border-zinc-800/80 px-3 py-2">
           <span class="h-2.5 w-2.5 rounded-[3px]" :class="dot(c)" />
           <span class="font-mono text-[13px] text-zinc-100">{{ c.name }}</span>
-          <span v-if="c.init" class="chip">init</span>
-          <span v-if="c.restartCount" class="rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-300" :title="`${c.restartCount} reinício(s)`">{{ c.restartCount }} {{ c.restartCount === 1 ? 'reinício' : 'reinícios' }}</span>
+          <span v-if="c.init" class="chip">{{ tr('init') }}</span>
+          <span v-if="c.restartCount" class="rounded-full bg-amber-500/15 px-1.5 text-[10px] text-amber-300" :title="tr('{a} reinício(s)', { a: c.restartCount })">{{ c.restartCount }} {{ c.restartCount === 1 ? tr('reinício') : tr('reinícios') }}</span>
           <span class="ml-auto flex gap-1">
-            <button class="mini" @click="emit('container', 'logs', c.name)">Logs</button>
-            <button v-if="c.restartCount" class="mini" @click="emit('container', 'previous', c.name)">Logs anteriores</button>
-            <button v-if="c.state === 'running'" class="mini" @click="emit('container', 'shell', c.name)">Shell</button>
+            <button class="mini" @click="emit('container', 'logs', c.name)">{{ tr('Logs') }}</button>
+            <button v-if="c.restartCount" class="mini" @click="emit('container', 'previous', c.name)">{{ tr('Logs anteriores') }}</button>
+            <button v-if="c.state === 'running'" class="mini" @click="emit('container', 'shell', c.name)">{{ tr('Shell') }}</button>
           </span>
         </header>
 
         <div v-if="!c.init" class="border-b border-zinc-800/60 px-2 pt-2">
           <div class="mb-1 flex items-baseline gap-2 px-1 text-[11px] text-zinc-400">
-            {{ metric === 'cpu' ? 'Uso de CPU' : 'Uso de memória' }}
+            {{ metric === 'cpu' ? tr('Uso de CPU') : tr('Uso de memória') }}
             <span v-if="latest(c.name)" class="font-mono text-zinc-100">{{ fmt(latest(c.name)![metric]) }}</span>
           </div>
           <MetricsChart
             :points="series(c.name)" :refs="refsFor(c)" :format="fmt" :window-ms="windowMs" :gap-ms="intervalMs * 4"
-            :label="`${metric === 'cpu' ? 'CPU' : 'Memória'} do container ${c.name}`"
+            :label="tr('{a} do container {b}', { a: metric === 'cpu' ? 'CPU' : 'Memória', b: c.name })"
           />
         </div>
 
         <div class="px-3 pb-1">
-          <div class="prop"><span class="prop-k">Status</span><span class="prop-v" :class="stateClass(c)">{{ stateText(c) }}</span></div>
-          <div v-if="c.stateMessage" class="prop"><span class="prop-k">Mensagem</span><span class="prop-v break-words text-zinc-300 select-text">{{ c.stateMessage }}</span></div>
+          <div class="prop"><span class="prop-k">{{ tr('Status') }}</span><span class="prop-v" :class="stateClass(c)">{{ stateText(c) }}</span></div>
+          <div v-if="c.stateMessage" class="prop"><span class="prop-k">{{ tr('Mensagem') }}</span><span class="prop-v break-words text-zinc-300 select-text">{{ c.stateMessage }}</span></div>
           <div v-if="c.lastTermination" class="prop">
-            <span class="prop-k">Último término</span>
+            <span class="prop-k">{{ tr('Último término') }}</span>
             <span class="prop-v">
               <span class="text-amber-300">{{ c.lastTermination.reason || 'Terminated' }}</span>
               · exit {{ c.lastTermination.exitCode }} <span class="text-zinc-400">({{ c.lastTermination.meaning }})</span>
@@ -191,20 +192,20 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
               <span v-if="c.lastTermination.message" class="mt-1 block font-mono text-[11px] whitespace-pre-wrap text-zinc-400 select-text">{{ c.lastTermination.message }}</span>
             </span>
           </div>
-          <div class="prop"><span class="prop-k">Image</span><span class="prop-v"><span class="chip font-mono break-all select-text">{{ c.image }}</span></span></div>
-          <div class="prop"><span class="prop-k">ImagePullPolicy</span><span class="prop-v">{{ c.imagePullPolicy }}</span></div>
+          <div class="prop"><span class="prop-k">{{ tr('Image') }}</span><span class="prop-v"><span class="chip font-mono break-all select-text">{{ c.image }}</span></span></div>
+          <div class="prop"><span class="prop-k">{{ tr('ImagePullPolicy') }}</span><span class="prop-v">{{ c.imagePullPolicy }}</span></div>
           <div v-if="(c.ports ?? []).length" class="prop">
-            <span class="prop-k">Ports</span>
+            <span class="prop-k">{{ tr('Ports') }}</span>
             <span class="prop-v flex flex-wrap gap-1">
               <button
                 v-for="p in c.ports" :key="p.containerPort" class="chip font-mono hover:bg-sky-500/20 hover:text-sky-200"
-                :title="`Port-forward da porta ${p.containerPort}`"
+                :title="tr('Port-forward da porta {a}', { a: p.containerPort })"
                 @click="openForward({ cluster, kind: 'pod', namespace, name, port: p.containerPort })"
               >{{ p.name ? `${p.name}: ` : '' }}{{ p.containerPort }}/{{ p.protocol }} <span class="text-sky-400">→</span></button>
             </span>
           </div>
           <div class="prop">
-            <span class="prop-k">Resources</span>
+            <span class="prop-k">{{ tr('Resources') }}</span>
             <span class="prop-v font-mono text-[11px]">
               <span class="block">requests: cpu {{ c.requests.cpu ? cpu(c.requests.cpu) : '—' }} · mem {{ c.requests.memory ? bytes(c.requests.memory) : '—' }}</span>
               <span class="block">limits:   cpu {{ c.limits.cpu ? cpu(c.limits.cpu) : '—' }} · mem {{ c.limits.memory ? bytes(c.limits.memory) : '—' }}</span>
@@ -212,10 +213,10 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
           </div>
           <div v-if="(c.env ?? []).length || (c.envFrom ?? []).length" class="prop">
             <button class="prop-k flex items-center gap-1 text-left hover:text-zinc-300" @click="toggle(`env:${c.name}`)">
-              Environment <Icon name="chevron" :size="10" class="transition-transform" :class="open.has(`env:${c.name}`) && 'rotate-90'" />
+              {{ tr('Environment') }} <Icon name="chevron" :size="10" class="transition-transform" :class="open.has(`env:${c.name}`) && 'rotate-90'" />
             </button>
             <span class="prop-v">
-              <template v-if="!open.has(`env:${c.name}`)">{{ (c.env ?? []).length }} variáveis<template v-if="(c.envFrom ?? []).length"> + {{ c.envFrom.join(', ') }}</template></template>
+              <template v-if="!open.has(`env:${c.name}`)">{{ tr('{n} variáveis', { n: (c.env ?? []).length }) }}<template v-if="(c.envFrom ?? []).length"> + {{ c.envFrom.join(', ') }}</template></template>
               <span v-else class="flex flex-col gap-1 font-mono text-[11px]">
                 <span v-for="e in c.env ?? []" :key="e.name" class="break-all select-text">
                   <span class="text-zinc-300">{{ e.name }}</span>=<span v-if="e.from" class="text-sky-300/80">{{ e.from }}</span><span v-else class="text-zinc-400">{{ e.value }}</span>
@@ -225,7 +226,7 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '')
             </span>
           </div>
           <div v-if="(c.mounts ?? []).length" class="prop">
-            <span class="prop-k">Mounts</span>
+            <span class="prop-k">{{ tr('Mounts') }}</span>
             <span class="prop-v flex flex-col gap-1.5">
               <span v-for="m in c.mounts" :key="m.path + m.volume">
                 <span class="chip font-mono break-all">{{ m.path }}</span>

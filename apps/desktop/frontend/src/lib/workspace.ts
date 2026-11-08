@@ -10,7 +10,7 @@ import { reactive, shallowRef, watch } from 'vue'
 import { newId } from './bridge'
 import type { View } from './types'
 
-export interface MainTab { id: string; view: View; search: string }
+export interface MainTab { id: string; view: View; search: string; focus?: string } // focus: "ns/name" to open once
 export interface Pane { tabs: MainTab[]; active: string }
 export interface Workspace { panes: Pane[]; focus: number; ratio: number }
 
@@ -79,19 +79,21 @@ export function ensure(cluster: string): Workspace {
 export const activeOf = (p: Pane) => p.tabs.find((t) => t.id === p.active) ?? null
 
 /** Show `view` in the pane's current tab (a sidebar click). */
-export function setView(w: Workspace, pane: number, view: View, search = '') {
+export function setView(w: Workspace, pane: number, view: View, search = '', focus?: string) {
   const p = w.panes[pane]
   const cur = activeOf(p)
-  if (!cur || cur.view.type === 'dock') return openTab(w, pane, view, search) // never replace a stream
+  if (!cur || cur.view.type === 'dock') return openTab(w, pane, view, search, focus) // never replace a stream
   cur.view = view
   cur.search = search
+  cur.focus = focus
   w.focus = pane
 }
 
 /** Open `view` in a new tab, right after the pane's current one. */
-export function openTab(w: Workspace, pane: number, view: View, search = '') {
+export function openTab(w: Workspace, pane: number, view: View, search = '', focus?: string) {
   const p = w.panes[pane]
   const t = tab(view, search)
+  t.focus = focus
   const at = p.tabs.findIndex((x) => x.id === p.active)
   p.tabs.splice(at < 0 ? p.tabs.length : at + 1, 0, t)
   p.active = t.id

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** "Why is this pod restarting / not running", in plain language. */
+import { tr } from '@/lib/i18n'
 import type { pods } from '../../wailsjs/go/models'
 
 defineProps<{ items: pods.Diagnosis[] }>()
@@ -23,9 +24,9 @@ const s = (sev: string) => style[(sev in style ? sev : 'info') as keyof typeof s
             <span v-if="d.container" class="font-mono text-zinc-400">{{ d.container }}: </span>{{ d.title }}
           </p>
           <p v-if="d.detail" class="mt-1 break-words whitespace-pre-line text-zinc-300 select-text">{{ d.detail }}</p>
-          <p v-if="d.hint" class="mt-1.5 text-zinc-400"><span class="text-zinc-500">Dica:</span> {{ d.hint }}</p>
+          <p v-if="d.hint" class="mt-1.5 text-zinc-400"><span class="text-zinc-500">{{ tr('Dica:') }}</span> {{ d.hint }}</p>
           <button v-if="d.container && /Reiniciou|CrashLoop/.test(d.title)" class="mt-2 rounded border border-zinc-700 px-2 py-0.5 text-zinc-200 hover:bg-zinc-800" @click="emit('previousLogs', d.container)">
-            Ver logs da execução anterior
+            {{ tr('Ver logs da execução anterior') }}
           </button>
         </div>
       </div>

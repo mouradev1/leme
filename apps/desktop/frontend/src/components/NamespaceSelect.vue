@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /** Multi-select namespace filter with type-ahead. [] means all namespaces. */
+import { tr } from '@/lib/i18n'
 import { computed, nextTick, ref } from 'vue'
 import { useDismiss } from '@/lib/dom'
 import Icon from './Icon.vue'
 
-const props = defineProps<{ options: string[]; disabled?: boolean }>()
+const props = defineProps<{ options: string[]; disabled?: boolean; projects?: Record<string, string> }>()
 const model = defineModel<string[]>({ required: true })
 
 const open = ref(false)
@@ -16,7 +17,7 @@ useDismiss(root, () => (open.value = false))
 const label = computed(() => {
   if (props.disabled) return 'Cluster-wide'
   const v = model.value
-  if (!v.length) return 'Todos os namespaces'
+  if (!v.length) return tr('Todos os namespaces')
   if (v.length <= 2) return v.join(', ')
   return `${v.length} namespaces`
 })
@@ -28,6 +29,23 @@ const filtered = computed(() => {
   const sel = new Set(model.value)
   return [...list.filter((o) => sel.has(o)), ...list.filter((o) => !sel.has(o))]
 })
+
+// Rancher clusters: namespaces grouped by Project (how teams think of them).
+const groups = computed(() => {
+  const p = props.projects ?? {}
+  if (!Object.keys(p).length) return null
+  const m = new Map<string, string[]>()
+  for (const ns of filtered.value) {
+    const g = p[ns] ?? tr('Sem projeto')
+    if (!m.has(g)) m.set(g, [])
+    m.get(g)!.push(ns)
+  }
+  return [...m].sort(([a], [b]) => (a === 'Sem projeto' ? 1 : b === 'Sem projeto' ? -1 : a.localeCompare(b)))
+})
+function selectProject(list: string[]) {
+  model.value = [...list].sort()
+  open.value = false
+}
 
 async function toggleOpen() {
   if (props.disabled) return
@@ -71,7 +89,7 @@ function onEnter() {
     <div v-if="open" class="absolute top-9 left-0 z-40 w-72 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl shadow-black/50">
       <div class="border-b border-zinc-800 p-2">
         <input
-          ref="input" v-model="q" placeholder="Filtrar namespaces…"
+          ref="input" v-model="q" :placeholder="tr('Filtrar namespaces…')"
           class="w-full rounded bg-zinc-950 px-2 py-1.5 text-xs outline-none placeholder:text-zinc-600"
           @keydown.enter.prevent="onEnter"
         />
@@ -81,11 +99,16 @@ function onEnter() {
           class="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-zinc-800"
           :class="!model.length && 'text-sky-300'" @click="model = []; open = false"
         >
-          <span class="grid w-3.5 place-items-center"><Icon v-if="!model.length" name="check" :size="13" /></span> Todos os namespaces
+          <span class="grid w-3.5 place-items-center"><Icon v-if="!model.length" name="check" :size="13" /></span> {{ tr('Todos os namespaces') }}
         </button>
         <div class="my-1 border-t border-zinc-800" />
+        <template v-for="[g, list] in groups ?? [['', filtered]]" :key="g">
+        <div v-if="g" class="group/p flex items-center gap-2 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">
+          <span class="min-w-0 flex-1 truncate" :title="tr('Projeto do Rancher: {a}', { a: g })">{{ g }}</span>
+          <button class="hidden rounded px-1.5 font-normal tracking-normal normal-case text-zinc-400 group-hover/p:block hover:bg-zinc-700 hover:text-zinc-100" @click="selectProject(list)">{{ tr('selecionar projeto') }}</button>
+        </div>
         <div
-          v-for="ns in filtered" :key="ns"
+          v-for="ns in list" :key="ns"
           class="group flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-zinc-800"
           @click="toggle(ns)"
         >
@@ -95,10 +118,11 @@ function onEnter() {
           ><Icon v-if="model.includes(ns)" name="check" :size="11" /></span>
           <span class="min-w-0 flex-1 truncate">{{ ns }}</span>
           <button class="hidden rounded px-1.5 text-[10px] text-zinc-400 group-hover:block hover:bg-zinc-700 hover:text-zinc-100" @click.stop="only(ns)">
-            somente
+            {{ tr('somente') }}
           </button>
         </div>
-        <p v-if="!filtered.length" class="px-3 py-2 text-zinc-500">Nenhum namespace</p>
+        </template>
+        <p v-if="!filtered.length" class="px-3 py-2 text-zinc-500">{{ tr('Nenhum namespace') }}</p>
       </div>
     </div>
   </div>

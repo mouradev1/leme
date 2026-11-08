@@ -5,9 +5,12 @@ package helm
 import (
 	"context"
 	"fmt"
+	"leme/internal/platform/i18n"
+	"strings"
 	"time"
 
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
@@ -42,6 +45,40 @@ type InstallRequest struct {
 	ValuesYAML      string `json:"valuesYAML"`
 	CreateNamespace bool   `json:"createNamespace"`
 	Wait            bool   `json:"wait"`
+}
+
+// UpgradeRequest changes a release: new values and/or a new chart version.
+// Chart empty = keep the release's current chart (values-only upgrade).
+type UpgradeRequest struct {
+	ReleaseName string `json:"releaseName"`
+	Namespace   string `json:"namespace"`
+	Chart       string `json:"chart"`
+	RepoURL     string `json:"repoURL"`
+	Version     string `json:"version"`
+	ValuesYAML  string `json:"valuesYAML"` // the release's user values, replaced as a whole
+	Wait        bool   `json:"wait"`
+}
+
+// checkRepo: charts from the network only over https or OCI registries.
+func checkRepo(repoURL, chart string) error {
+	if repoURL != "" && !strings.HasPrefix(repoURL, "https://") {
+		return fmt.Errorf(i18n.T("use um repositório https:// (recebido %q)", "use an https:// repository (got %q)"), repoURL)
+	}
+	if strings.Contains(chart, "://") && !strings.HasPrefix(chart, "oci://") && !strings.HasPrefix(chart, "https://") {
+		return fmt.Errorf(i18n.T("chart remoto só por https:// ou oci:// (recebido %q)", "remote charts only over https:// or oci:// (got %q)"), chart)
+	}
+	return nil
+}
+
+func parseValues(s string) (map[string]any, error) {
+	vals := map[string]any{}
+	if err := yaml.Unmarshal([]byte(s), &vals); err != nil {
+		return nil, fmt.Errorf("values: %w", err)
+	}
+	if vals == nil {
+		vals = map[string]any{}
+	}
+	return vals, nil
 }
 
 type Client struct{ s *cluster.Session }
@@ -125,6 +162,9 @@ func (c *Client) Uninstall(ns, name string) error {
 }
 
 func (c *Client) Install(ctx context.Context, r InstallRequest) (Release, error) {
+	if err := checkRepo(r.RepoURL, r.Chart); err != nil {
+		return Release{}, err
+	}
 	cfg, err := c.config(r.Namespace)
 	if err != nil {
 		return Release{}, err
@@ -143,11 +183,52 @@ func (c *Client) Install(ctx context.Context, r InstallRequest) (Release, error)
 	if err != nil {
 		return Release{}, err
 	}
-	vals := map[string]any{}
-	if err := yaml.Unmarshal([]byte(r.ValuesYAML), &vals); err != nil {
-		return Release{}, fmt.Errorf("values: %w", err)
+	vals, err := parseValues(r.ValuesYAML)
+	if err != nil {
+		return Release{}, err
 	}
 	rel, err := in.RunWithContext(ctx, ch, vals)
+	if err != nil {
+		return Release{}, err
+	}
+	return toDTO(rel), nil
+}
+
+// Upgrade applies new values (and optionally another chart version).
+func (c *Client) Upgrade(ctx context.Context, r UpgradeRequest) (Release, error) {
+	if err := checkRepo(r.RepoURL, r.Chart); err != nil {
+		return Release{}, err
+	}
+	cfg, err := c.config(r.Namespace)
+	if err != nil {
+		return Release{}, err
+	}
+	vals, err := parseValues(r.ValuesYAML)
+	if err != nil {
+		return Release{}, err
+	}
+	up := action.NewUpgrade(cfg)
+	up.Namespace, up.RepoURL, up.Version = r.Namespace, r.RepoURL, r.Version
+	up.Wait, up.Timeout = r.Wait, 5*time.Minute
+	up.SetRegistryClient(cfg.RegistryClient)
+
+	var ch *chart.Chart
+	if r.Chart == "" {
+		cur, err := action.NewGet(cfg).Run(r.ReleaseName)
+		if err != nil {
+			return Release{}, err
+		}
+		ch = cur.Chart
+	} else {
+		path, err := up.ChartPathOptions.LocateChart(r.Chart, cli.New())
+		if err != nil {
+			return Release{}, fmt.Errorf("locate chart: %w", err)
+		}
+		if ch, err = loader.Load(path); err != nil {
+			return Release{}, err
+		}
+	}
+	rel, err := up.RunWithContext(ctx, r.ReleaseName, ch, vals)
 	if err != nil {
 		return Release{}, err
 	}

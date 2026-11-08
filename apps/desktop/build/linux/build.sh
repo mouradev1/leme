@@ -4,7 +4,7 @@
 # (macOS binaries) is never reused.
 set -euo pipefail
 ARCH=$(dpkg --print-architecture)
-VERSION=${VERSION:-0.3.0}
+VERSION=${VERSION:-0.3.1}
 OUT=/src/dist/linux
 mkdir -p "$OUT"
 

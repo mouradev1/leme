@@ -3,6 +3,7 @@
  * Tab bar of one main-area pane. Tabs can be reordered or dragged to the other
  * pane / beside this one; dock tabs (logs, terminals) can be dropped here too.
  */
+import { tr } from '@/lib/i18n'
 import { ref } from 'vue'
 import { dragging, type MainTab } from '@/lib/workspace'
 import Icon from './Icon.vue'
@@ -80,19 +81,19 @@ function onAux(e: MouseEvent, id: string) {
         <span v-if="label(t).sub" class="truncate text-zinc-500">{{ label(t).sub }}</span>
         <span
           class="ml-0.5 shrink-0 rounded p-0.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-zinc-100"
-          :class="t.id === active && 'opacity-60'" title="Fechar aba" @click.stop="emit('close', t.id)"
+          :class="t.id === active && 'opacity-60'" :title="tr('Fechar aba')" @click.stop="emit('close', t.id)"
         ><Icon name="close" :size="11" /></span>
       </button>
     </template>
     <span v-if="dropAt === tabs.length" class="h-5 w-0.5 shrink-0 rounded bg-sky-400" />
-    <button class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" title="Nova aba (clique do meio ou ⌘-clique no menu lateral também abre em nova aba)" @click="emit('new')">
+    <button class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" :title="tr('Nova aba (clique do meio ou ⌘-clique no menu lateral também abre em nova aba)')" @click="emit('new')">
       <Icon name="plus" :size="13" />
     </button>
     <div class="ml-auto flex shrink-0 items-center pl-2">
-      <button v-if="splitState === 'can-split'" class="strip-btn" title="Dividir tela (ou arraste uma aba para a direita da tela)" @click="emit('split')">
+      <button v-if="splitState === 'can-split'" class="strip-btn" :title="tr('Dividir tela (ou arraste uma aba para a direita da tela)')" @click="emit('split')">
         <Icon name="split" :size="14" />
       </button>
-      <button v-else-if="splitState === 'can-unsplit'" class="strip-btn" title="Fechar divisão (as abas deste painel vão para o outro)" @click="emit('unsplit')">
+      <button v-else-if="splitState === 'can-unsplit'" class="strip-btn" :title="tr('Fechar divisão (as abas deste painel vão para o outro)')" @click="emit('unsplit')">
         <Icon name="close" :size="13" />
       </button>
     </div>

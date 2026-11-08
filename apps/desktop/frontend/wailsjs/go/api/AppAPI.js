@@ -10,6 +10,14 @@ export function Prefs() {
   return window['go']['api']['AppAPI']['Prefs']();
 }
 
+export function SetLanguage(arg1) {
+  return window['go']['api']['AppAPI']['SetLanguage'](arg1);
+}
+
+export function SetNodeShell(arg1, arg2) {
+  return window['go']['api']['AppAPI']['SetNodeShell'](arg1, arg2);
+}
+
 export function SetUpdateCheck(arg1) {
   return window['go']['api']['AppAPI']['SetUpdateCheck'](arg1);
 }

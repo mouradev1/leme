@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"fmt"
+	"leme/internal/platform/i18n"
 	"sort"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,11 +34,11 @@ type WorkloadPods struct {
 func PodSelector(obj *unstructured.Unstructured) (labels.Selector, error) {
 	raw, found, err := unstructured.NestedFieldNoCopy(obj.Object, "spec", "selector")
 	if err != nil || !found || raw == nil {
-		return nil, fmt.Errorf("%s %q não tem seletor de pods", obj.GetKind(), obj.GetName())
+		return nil, fmt.Errorf(i18n.T("%s %q não tem seletor de pods", "%s %q has no pod selector"), obj.GetKind(), obj.GetName())
 	}
 	m, ok := raw.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("seletor inválido em %s %q", obj.GetKind(), obj.GetName())
+		return nil, fmt.Errorf(i18n.T("seletor inválido em %s %q", "invalid selector in %s %q"), obj.GetKind(), obj.GetName())
 	}
 	if obj.GetKind() == "Service" {
 		set := labels.Set{}
@@ -47,7 +48,7 @@ func PodSelector(obj *unstructured.Unstructured) (labels.Selector, error) {
 			}
 		}
 		if len(set) == 0 {
-			return nil, fmt.Errorf("o service %q não tem seletor de pods", obj.GetName())
+			return nil, fmt.Errorf(i18n.T("o service %q não tem seletor de pods", "service %q has no pod selector"), obj.GetName())
 		}
 		return labels.SelectorFromSet(set), nil
 	}

@@ -7,6 +7,10 @@ export function CheckUpdate(arg1:boolean):Promise<update.Info>;
 
 export function Prefs():Promise<api.Prefs>;
 
+export function SetLanguage(arg1:string):Promise<void>;
+
+export function SetNodeShell(arg1:boolean,arg2:string):Promise<void>;
+
 export function SetUpdateCheck(arg1:boolean):Promise<void>;
 
 export function SkipVersion(arg1:string):Promise<void>;

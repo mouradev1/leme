@@ -2,8 +2,12 @@ package api
 
 import (
 	"errors"
+	"leme/internal/platform/i18n"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
+	"slices"
 	"sort"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -45,6 +49,35 @@ func (a *ClusterAPI) Disconnect(name string) {
 
 // KubeconfigFiles lists every file feeding the context list.
 func (a *ClusterAPI) KubeconfigFiles() []cluster.KubeconfigFile { return a.d.Clusters.Files() }
+
+// RevealKubeconfig shows a kubeconfig file in the system file manager
+// (Finder / Explorer / the folder on Linux). Only files in the list.
+func (a *ClusterAPI) RevealKubeconfig(path string) error {
+	known := false
+	for _, f := range a.d.Clusters.Files() {
+		if f.Path == path && f.Exists {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return errors.New(i18n.T(i18n.T("arquivo não está na lista de kubeconfigs", "file is not in the kubeconfig list"), "file is not in the kubeconfig list"))
+	}
+	var cmd *exec.Cmd
+	switch goruntime.GOOS {
+	case "darwin":
+		cmd = exec.Command("/usr/bin/open", "-R", path)
+	case "windows":
+		cmd = exec.Command("explorer.exe", "/select,"+path)
+	default:
+		cmd = exec.Command("xdg-open", filepath.Dir(path))
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }() // reap; explorer.exe exits 1 even on success
+	return nil
+}
 
 // AddKubeconfig adds a kubeconfig from any path (typed/pasted in the UI).
 // Returns how many contexts the file defines. Persisted across restarts.
@@ -128,4 +161,18 @@ func (a *ClusterAPI) Namespaces(name string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// ApproveExec allows the credential command of a context's kubeconfig to run
+// (asked once per distinct command line).
+func (a *ClusterAPI) ApproveExec(name string) error {
+	cmd := a.d.Clusters.ExecCommandOf(name)
+	if cmd == "" {
+		return nil
+	}
+	s := settings.Load()
+	if !slices.Contains(s.ApprovedExec, cmd) {
+		s.ApprovedExec = append(s.ApprovedExec, cmd)
+	}
+	return settings.Save(s)
 }

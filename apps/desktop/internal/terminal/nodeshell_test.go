@@ -12,7 +12,7 @@ import (
 )
 
 func TestNodeShellPodSpec(t *testing.T) {
-	p := nodeShellPod("k8s-node-a")
+	p := nodeShellPod("k8s-node-a", DefaultNodeShellImage)
 	c := p.Spec.Containers[0]
 	switch {
 	case p.Spec.NodeName != "k8s-node-a":
@@ -42,7 +42,7 @@ func TestWaitRunningReportsImagePullErrors(t *testing.T) {
 			Name: "shell", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ErrImagePull", Message: "dial tcp: i/o timeout"}},
 		}}},
 	})
-	err := waitRunning(context.Background(), kube, "leme-node-shell-x", func(string, ...any) {})
+	err := waitRunning(context.Background(), kube, "leme-node-shell-x", DefaultNodeShellImage, func(string, ...any) {})
 	if err == nil || !strings.Contains(err.Error(), "baixar a imagem") {
 		t.Fatalf("want a friendly image pull error, got %v", err)
 	}
@@ -81,5 +81,19 @@ func TestCloseWhileStarting(t *testing.T) {
 	}
 	if _, err := m.get("t1"); err == nil {
 		t.Fatal("closed session must not be registered")
+	}
+}
+
+func TestValidNodeShellImage(t *testing.T) {
+	if err := ValidNodeShellImage(DefaultNodeShellImage); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"busybox:1.36", "busybox@sha256:abc", "registry.x/busybox:latest", ""} {
+		if ValidNodeShellImage(bad) == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	if ValidNodeShellImage("registry.empresa.com:5000/tools/busybox:1.36@sha256:"+strings.Repeat("a", 64)) != nil {
+		t.Error("mirror with digest rejected")
 	}
 }

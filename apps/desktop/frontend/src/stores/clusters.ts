@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { ListContexts, Connect, Disconnect, Namespaces } from '../../wailsjs/go/api/ClusterAPI'
 import { Catalog, RefreshCatalog } from '../../wailsjs/go/api/ResourceAPI'
+import { NamespaceProjects } from '../../wailsjs/go/api/RancherAPI'
 import type { api, cluster, resources } from '../../wailsjs/go/models'
 import { errMsg, on } from '@/lib/bridge'
 
@@ -24,6 +25,8 @@ export const useClusters = defineStore('clusters', () => {
   const selectedNamespaces = ref<string[]>([]) // [] = all namespaces
   const connecting = ref('')
   const error = ref('')
+  const projects = ref<Record<string, string>>({}) // namespace -> Rancher Project (Rancher clusters only)
+  const failed = ref('') // context whose connection failed (to retry after a Rancher login)
 
   on<cluster.ContextInfo[]>('clusters:changed', (list) => (contexts.value = list))
 
@@ -34,6 +37,7 @@ export const useClusters = defineStore('clusters', () => {
   async function activate(name: string) {
     connecting.value = name
     error.value = ''
+    failed.value = ''
     try {
       server.value = await Connect(name) // runs exec plugins / SSO on first use
       const [kinds, nss] = await Promise.all([Catalog(name), Namespaces(name)])
@@ -41,9 +45,12 @@ export const useClusters = defineStore('clusters', () => {
       catalog.value = kinds
       namespaces.value = nss
       selectedNamespaces.value = readNs(name).filter((n) => nss.includes(n))
+      projects.value = {}
+      NamespaceProjects(name).then((p) => { if (active.value === name) projects.value = p ?? {} }).catch(() => {})
       await load() // refresh "connected" flags
     } catch (e) {
       error.value = errMsg(e)
+      failed.value = name
     } finally {
       connecting.value = ''
     }
@@ -91,7 +98,7 @@ export const useClusters = defineStore('clusters', () => {
   })
 
   return {
-    contexts, active, server, catalog, namespaces, selectedNamespaces, connecting, error, sections,
+    contexts, active, server, catalog, namespaces, selectedNamespaces, projects, connecting, error, failed, sections,
     load, activate, disconnect, refreshCatalog, findKind,
   }
 })

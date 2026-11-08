@@ -5,6 +5,7 @@
  * live in stable hosts (lib/hosts.ts), so shells and log streams survive
  * switching tabs and moving to a main-area pane and back.
  */
+import { tr } from '@/lib/i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { DockTab } from '@/lib/types'
 import { dragging } from '@/lib/workspace'
@@ -98,7 +99,7 @@ function toggleMax() {
         v-for="t in visible" :key="t.id"
         class="group flex h-7 max-w-56 items-center gap-1.5 rounded-md px-2.5"
         :class="t.id === active && !collapsed ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'"
-        :title="`${t.title} (${t.cluster}): arraste para a área principal ou clique com o botão direito`"
+        :title="tr('{a} ({b}): arraste para a área principal ou clique com o botão direito', { a: t.title, b: t.cluster })"
         draggable="true"
         @click="active = t.id; collapsed = false" @contextmenu.prevent="emit('menu', $event, t.id)"
         @dragstart="onDragStart($event, t.id)" @dragend="dragging = null"
@@ -109,15 +110,15 @@ function toggleMax() {
           <Icon name="close" :size="11" />
         </span>
       </button>
-      <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Novo terminal local" @click="emit('newTerminal')">
+      <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="tr('Novo terminal local')" @click="emit('newTerminal')">
         <Icon name="plus" :size="14" />
       </button>
-      <span v-if="canTakeBack" class="ml-1 text-sky-300">Solte aqui para voltar ao dock</span>
-      <span v-else-if="!visible.length" class="ml-1 text-zinc-600">Terminal</span>
+      <span v-if="canTakeBack" class="ml-1 text-sky-300">{{ tr('Solte aqui para voltar ao dock') }}</span>
+      <span v-else-if="!visible.length" class="ml-1 text-zinc-600">{{ tr('Terminal') }}</span>
       <span
         v-if="elsewhere.length" class="ml-2 rounded-full border border-zinc-800 px-2 py-0.5 text-[11px] text-zinc-500"
-        :title="`Abas abertas em: ${elsewhereClusters}. Elas continuam conectadas aos seus clusters e voltam quando você trocar para eles.`"
-      >{{ elsewhere.length }} em outros clusters</span>
+        :title="tr('Abas abertas em: {a}. Elas continuam conectadas aos seus clusters e voltam quando você trocar para eles.', { a: elsewhereClusters })"
+      >{{ tr('{n} em outros clusters', { n: elsewhere.length }) }}</span>
 
       <div class="ml-auto flex items-center gap-0.5">
         <button v-if="visible.length" class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="maximized ? 'Restaurar' : 'Maximizar'" @click="toggleMax">

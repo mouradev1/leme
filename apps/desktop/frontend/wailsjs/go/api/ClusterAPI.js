@@ -10,6 +10,14 @@ export function AppVersion() {
   return window['go']['api']['ClusterAPI']['AppVersion']();
 }
 
+export function ApproveExec(arg1) {
+  return window['go']['api']['ClusterAPI']['ApproveExec'](arg1);
+}
+
+export function ClusterPrefs() {
+  return window['go']['api']['ClusterAPI']['ClusterPrefs']();
+}
+
 export function Connect(arg1) {
   return window['go']['api']['ClusterAPI']['Connect'](arg1);
 }
@@ -38,6 +46,14 @@ export function RemoveKubeconfig(arg1) {
   return window['go']['api']['ClusterAPI']['RemoveKubeconfig'](arg1);
 }
 
+export function RevealKubeconfig(arg1) {
+  return window['go']['api']['ClusterAPI']['RevealKubeconfig'](arg1);
+}
+
 export function SaveKubeconfig(arg1, arg2) {
   return window['go']['api']['ClusterAPI']['SaveKubeconfig'](arg1, arg2);
+}
+
+export function SetClusterPrefs(arg1, arg2) {
+  return window['go']['api']['ClusterAPI']['SetClusterPrefs'](arg1, arg2);
 }

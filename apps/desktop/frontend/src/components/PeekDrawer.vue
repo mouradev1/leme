@@ -5,6 +5,7 @@
  * Watches just that one object (fieldSelector metadata.name), so it's live and
  * costs one tiny stream.
  */
+import { tr } from '@/lib/i18n'
 import { computed, toRef } from 'vue'
 import type { resources } from '../../wailsjs/go/models'
 import { useResourceWatch } from '@/composables/useResourceWatch'
@@ -54,18 +55,18 @@ const usageOf = (r: Row) => usage.value.get(`${r.namespace ?? ''}/${r.name}`)
   />
   <aside v-else class="flex h-full w-[480px] shrink-0 flex-col border-l border-zinc-800 bg-zinc-925">
     <header class="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-800 px-4 text-[13px]">
-      <button v-if="back" class="grid h-7 w-7 -ml-2 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="`Voltar para ${back}`" @click="emit('back')">
+      <button v-if="back" class="grid h-7 w-7 -ml-2 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="tr('Voltar para {a}', { a: back })" @click="emit('back')">
         <Icon name="back" :size="15" />
       </button>
       <span class="min-w-0 flex-1 truncate text-zinc-100"><b>{{ kind.kind }}:</b> {{ name }}</span>
-      <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Fechar" @click="emit('close')"><Icon name="close" :size="14" /></button>
+      <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="tr('Fechar')" @click="emit('close')"><Icon name="close" :size="14" /></button>
     </header>
     <div class="p-4 text-xs">
       <p v-if="error" class="text-rose-300">{{ error }}</p>
       <p v-else-if="loading" class="flex items-center gap-2 text-zinc-500">
-        <span class="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-400" /> carregando…
+        <span class="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-400" /> {{ tr('carregando…') }}
       </p>
-      <p v-else class="text-zinc-500">{{ kind.kind }} "{{ name }}" não encontrado (pode ter sido removido).</p>
+      <p v-else class="text-zinc-500">{{ tr('{k} "{n}" não encontrado (pode ter sido removido).', { k: kind.kind, n: name }) }}</p>
     </div>
   </aside>
 </template>
