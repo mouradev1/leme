@@ -64,6 +64,7 @@ export interface NavigateTarget {
   kind: string // Kind name, e.g. "ReplicaSet"
   search?: string
   namespace?: string
+  open?: boolean // also open the object's details panel
 }
 
 export type View =
