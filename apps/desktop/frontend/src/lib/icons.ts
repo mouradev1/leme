@@ -13,6 +13,7 @@ export const icons: Record<string, string> = {
   'Custom Resources': 'M3 3h3.5v1a1.5 1.5 0 0 0 3 0V3H13v3.5h-1a1.5 1.5 0 0 0 0 3h1V13H3z',
   Other: 'M4 8h.01M8 8h.01M12 8h.01',
   copy: 'M5.5 5.5h8v8h-8zM10.5 5.5v-3h-8v8h3',
+  coffee: 'M2.5 6h9v4a3.5 3.5 0 0 1-3.5 3.5H6A3.5 3.5 0 0 1 2.5 10zM11.5 7h1a1.75 1.75 0 0 1 0 3.5h-1M5 2.5v1.5M8 2v2',
   folder: 'M2 4h4l1.5 1.5H14V12.5H2z',
   pin: 'M8 2.2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.4 4.4 13.3l.7-4L2.2 6.5l4-.6z',
   keyboard: 'M1.5 4h13v8h-13zM4 6.5h.01M6.5 6.5h.01M9 6.5h.01M11.5 6.5h.01M4.5 9.5h7',

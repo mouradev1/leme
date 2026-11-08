@@ -38,6 +38,7 @@ import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
 import ClusterLabelDialog from '@/components/ClusterLabelDialog.vue'
 import { objects } from '@/lib/recents'
+import { donate } from '@/lib/donate'
 import { useClusters } from '@/stores/clusters'
 import { usePanelWidth } from '@/lib/resize'
 import { errMsg, newId, on } from '@/lib/bridge'
@@ -46,7 +47,7 @@ import type { DockTab, NavigateTarget, NewDockTab, Row, RowAction, View } from '
 const store = useClusters()
 const { contexts, active, server, selectedNamespaces, connecting } = storeToRefs(store)
 onMounted(() => {
-  store.load()
+  void store.load().finally(() => window.dispatchEvent(new Event('leme:ready')))
   void loadPrefs()
   trackForwards()
   // New-version notice: a few seconds after startup, then again on the first
@@ -359,6 +360,7 @@ const paletteItems = computed<PaletteItem[]>(() => {
   }
   out.push({ id: 'a:add', group: tr('Ações'), label: tr('Adicionar cluster (kubeconfig ou Rancher)'), icon: 'plus', run: () => { rancherKeyFor.value = ''; showKubeconfigs.value = true } })
   out.push({ id: 'a:settings', group: tr('Ações'), label: tr('Ajustes'), sub: 'English / Português', icon: 'sliders', run: () => (showSettings.value = true) })
+  out.push({ id: 'a:coffee', group: tr('Ações'), label: tr('Pague um café'), sub: tr('apoie o projeto'), icon: 'coffee', run: donate })
   out.push({ id: 'a:help', group: tr('Ações'), label: tr('Atalhos de teclado'), icon: 'keyboard', keys: '?', run: () => (showHelp.value = true) })
   for (const x of contexts.value) if (x.name !== c) out.push({ id: `c:${x.name}`, group: tr('Clusters'), label: clusterLabel(x.name), sub: [clusterLabel(x.name) !== x.name ? x.name : '', x.connected ? tr('conectado') : ''].filter(Boolean).join(' · ') || undefined, icon: 'monitor', run: () => void openCluster(x.name) })
   return out

@@ -502,6 +502,10 @@ export const en: Record<string, string> = {
   'Cor': 'Color',
   'O kubeconfig não é alterado. Os atalhos e a paleta continuam aceitando o nome original.': 'The kubeconfig is not changed. Shortcuts and the palette still accept the original name.',
 
+  'Pague um café': 'Buy me a coffee',
+  'apoie o projeto': 'support the project',
+  'O Leme é gratuito e open source. Um café ajuda a manter o desenvolvimento.': 'Leme is free and open source. A coffee helps keep it going.',
+
   // ---- Settings
   'Idioma': 'Language',
   'Português': 'Português',

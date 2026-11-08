@@ -8,6 +8,7 @@ import { useClusters } from '@/stores/clusters'
 import { loginNeeded, stateLabel, useRancher } from '@/stores/rancher'
 import { errMsg } from '@/lib/bridge'
 import { clusterBg, clusterInitials, clusterLabel, isProd, isReadOnly } from '@/lib/guard'
+import { donate } from '@/lib/donate'
 import { AppVersion, ApproveExec } from '../../wailsjs/go/api/ClusterAPI'
 import type { NavigateTarget, View } from '@/lib/types'
 import { objects, togglePin, type ObjRef } from '@/lib/recents'
@@ -452,7 +453,11 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
         {{ tr('Leme') }} <span class="font-mono">{{ version === 'dev' ? 'dev' : `v${version}` }}</span>
         <span v-if="updateAvailable" class="ml-1 rounded-full bg-sky-500/15 px-1.5 text-sky-300">{{ tr('nova versão') }}</span>
       </button>
-      <button class="ml-auto grid h-6 w-6 place-items-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" :title="tr('Ajustes')" @click="emit('settings')">
+      <button
+        class="ml-auto flex h-6 items-center gap-1 rounded px-1.5 text-[11px] text-zinc-500 hover:bg-amber-500/10 hover:text-amber-300"
+        :title="tr('O Leme é gratuito e open source. Um café ajuda a manter o desenvolvimento.')" @click="donate"
+      ><Icon name="coffee" :size="13" />{{ tr('Pague um café') }}</button>
+      <button class="grid h-6 w-6 place-items-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" :title="tr('Ajustes')" @click="emit('settings')">
         <Icon name="sliders" :size="13" />
       </button>
       <div class="flex rounded-md border border-zinc-800 p-0.5">
