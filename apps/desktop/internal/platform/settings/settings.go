@@ -15,6 +15,39 @@ type Settings struct {
 	// Update notice: on by default; the user can turn it off or skip a version.
 	UpdateCheckDisabled bool   `json:"updateCheckDisabled,omitempty"`
 	SkippedVersion      string `json:"skippedVersion,omitempty"`
+	// Rancher servers. Tokens are NOT here: they live in the OS password store.
+	Ranchers []RancherServer `json:"ranchers,omitempty"`
+	// Per-cluster safety marks, by kubeconfig context name.
+	Clusters map[string]ClusterPrefs `json:"clusters,omitempty"`
+	// Node shell (privileged helper pod): can be turned off, or use an image
+	// from an internal registry (pinned by digest).
+	NodeShellDisabled bool   `json:"nodeShellDisabled,omitempty"`
+	NodeShellImage    string `json:"nodeShellImage,omitempty"`
+	// Commands that kubeconfigs may run to get credentials (exec plugins),
+	// approved by the user once.
+	ApprovedExec []string `json:"approvedExec,omitempty"`
+}
+
+// ClusterPrefs: Production asks for the cluster name before risky actions;
+// ReadOnly blocks every change (enforced in the backend, not just hidden).
+type ClusterPrefs struct {
+	Production bool `json:"production,omitempty"`
+	ReadOnly   bool `json:"readOnly,omitempty"`
+}
+
+// RancherServer is a Rancher the user added. Clusters is the last list seen,
+// so they show up right away (and while logged out) before a refresh.
+type RancherServer struct {
+	URL       string           `json:"url"`
+	Name      string           `json:"name"`
+	User      string           `json:"user,omitempty"`
+	ExpiresAt string           `json:"expiresAt,omitempty"`
+	Clusters  []RancherCluster `json:"clusters,omitempty"`
+}
+
+type RancherCluster struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func file() (string, error) {
