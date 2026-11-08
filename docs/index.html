@@ -218,6 +218,7 @@
       <a class="brand" href="#"><img src="assets/logo.png" alt="" /> Leme</a>
       <div class="links">
         <a class="opt" href="#recursos">Recursos</a>
+        <a class="opt" href="#rancher">Rancher</a>
         <a href="#download">Download</a>
         <a class="opt" href="#seguranca">Segurança</a>
         <a class="repo-link" href="#" hidden>GitHub</a>
@@ -331,12 +332,12 @@
         <div class="card">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h12v10H2zM4.5 6l2 2-2 2M8 10h3.5"/></svg>
           <h3>Logs e shell</h3>
-          <p>Logs ao vivo por container (inclusive da execução que caiu), terminal dentro do container, shell root no node e terminal local já apontando para o cluster certo.</p>
+          <p>Logs ao vivo de um container ou de todos os pods de um deployment, com período, filtro de erros, JSON legível e download. Terminal no container, shell root no node e terminal local já apontando para o cluster certo.</p>
         </div>
         <div class="card">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM8 5v3.5M8 11h.01"/></svg>
           <h3>Por que reiniciou?</h3>
-          <p>OOMKilled, liveness probe, CrashLoopBackOff, imagem que não baixa: o Leme cruza status e eventos e explica a causa em português.</p>
+          <p>OOMKilled, liveness probe, CrashLoopBackOff, imagem que não baixa: o Leme cruza status e eventos e explica a causa em português ou inglês. A visão geral lista os pods com problema agora.</p>
         </div>
         <div class="card">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13.5V8M6.3 13.5V4.5M9.7 13.5V9.5M13 13.5V2.5"/></svg>
@@ -351,19 +352,50 @@
         <div class="card">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5h11v8h-11zM2 2.5h12v3H2zM6.5 8.5h3"/></svg>
           <h3>Helm</h3>
-          <p>Releases, histórico de revisões, values e rollback para qualquer versão, direto do app, sem precisar do helm instalado.</p>
+          <p>Instale charts, atualize values e versões, veja o histórico e faça rollback, direto do app e sem precisar do helm instalado.</p>
         </div>
         <div class="card">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h8M8 4l4 4-4 4"/></svg>
           <h3>Ações rápidas</h3>
-          <p>Escalar, reiniciar (rollout), excluir em lote, cordon e drain de nodes e edição de ConfigMaps e Secrets direto no painel.</p>
+          <p>Escalar, reiniciar e voltar a versão de um deployment, port-forward, excluir em lote, cordon e drain de nodes e edição de ConfigMaps e Secrets no painel.</p>
         </div>
         <div class="card">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 9.6A5.4 5.4 0 0 1 6.4 3a5.4 5.4 0 1 0 6.6 6.6z"/></svg>
           <h3>Leve de verdade</h3>
           <p>Usa o WebView do próprio sistema, só busca dados das telas abertas e pausa quando a janela está minimizada.</p>
         </div>
+        <div class="card">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM10.3 10.3l3.2 3.2"/></svg>
+          <h3>Tudo a um atalho</h3>
+          <p>⌘K encontra qualquer pod, deployment ou secret pelo nome e troca de cluster. Abas, tela dividida, atalhos de teclado e objetos fixados no menu.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.2C4.9 13.4 2.5 11.2 2.5 8V4z"/></svg>
+          <h3>Produção protegida</h3>
+          <p>Marque clusters como produção (ações perigosas pedem o nome do cluster) ou somente leitura. Nome curto e cor por cluster para não confundir ambientes.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM1.8 8h12.4M8 1.8c1.7 1.8 2.5 3.8 2.5 6.2S9.7 12.4 8 14.2C6.3 12.4 5.5 10.4 5.5 8S6.3 3.6 8 1.8z"/></svg>
+          <h3>Português e inglês</h3>
+          <p>Escolha o idioma em Ajustes. Mensagens, diagnósticos e erros acompanham a escolha.</p>
+        </div>
       </div>
+    </div>
+  </section>
+
+  <section id="rancher">
+    <div class="wrap two">
+      <div>
+        <h2>Clusters do Rancher</h2>
+        <p class="sub">Para empresas que centralizam o acesso no Rancher. Informe o endereço do Rancher, entre com o login de sempre (Keycloak, AD...) e os clusters que você pode ver aparecem no Leme.</p>
+      </div>
+      <ul class="check">
+        <li><b>Um login para todos os clusters.</b> Nada de baixar um kubeconfig por cluster. Quando a sessão vence, um passo renova todos de uma vez.</li>
+        <li><b>As permissões continuam no Rancher.</b> Toda chamada passa pelo proxy do Rancher, que confere o que cada pessoa pode fazer. Quem é desligado no Keycloak perde o acesso na hora.</li>
+        <li><b>Login pelo navegador ou API key.</b> Com SAML o token chega direto ao app. Com OIDC ou contas locais, use uma API key criada no próprio Rancher.</li>
+        <li><b>Token no cofre do sistema.</b> Keychain no macOS, Gerenciador de Credenciais no Windows, GNOME Keyring ou KWallet no Linux. "Sair" revoga o token no Rancher.</li>
+        <li><b>Vários Rancher lado a lado.</b> Cada um com a sessão própria, avisos antes de vencer e namespaces agrupados por Projeto.</li>
+      </ul>
     </div>
   </section>
 
@@ -423,10 +455,12 @@
       </div>
       <ul class="check">
         <li><b>Sem telemetria.</b> Nenhum dado de uso, nenhuma conta, nenhum servidor intermediário.</li>
-        <li><b>Aviso de versão nova opcional.</b> Ao abrir, o Leme consulta a página pública de versões no GitHub, sem enviar nada sobre você ou seus clusters. Dá para desligar, e ele nunca baixa nada sozinho.</li>
-        <li><b>Credenciais locais.</b> Usa o seu kubeconfig; configs coladas ficam numa pasta privada (0700) e somem quando você remove.</li>
+        <li><b>Aviso de versão nova opcional.</b> Uma vez por dia o Leme consulta a página pública de versões no GitHub, sem enviar nada sobre você ou seus clusters. Dá para desligar, e ele nunca baixa nada sozinho.</li>
+        <li><b>Credenciais locais.</b> Usa o seu kubeconfig; configs coladas ficam numa pasta privada (0700) e somem quando você remove. Tokens do Rancher ficam no cofre de senhas do sistema.</li>
+        <li><b>Comandos de credencial aprovados por você.</b> Se um kubeconfig quiser executar um programa para obter credenciais (kubelogin, aws...), o Leme mostra o comando e pede permissão na primeira vez.</li>
+        <li><b>Produção e somente leitura.</b> Clusters marcados pedem confirmação com o nome antes de ações perigosas, ou recusam qualquer alteração.</li>
         <li><b>Interface isolada.</b> Content-Security-Policy impede a interface de carregar código ou enviar dados para fora.</li>
-        <li><b>TLS sempre verificado</b> e dependências checadas a cada build (govulncheck, npm audit, assinaturas do registro).</li>
+        <li><b>TLS sempre verificado</b> e dependências checadas a cada build (govulncheck, npm audit, assinaturas do registro). GitHub Actions fixadas por hash de commit.</li>
         <li><b>Builds reproduzíveis</b> no GitHub Actions, com checksums publicados em cada versão.</li>
       </ul>
     </div>
