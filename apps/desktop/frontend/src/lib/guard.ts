@@ -7,6 +7,7 @@ import { ref } from 'vue'
 import { ClusterPrefs, SetClusterPrefs } from '../../wailsjs/go/api/ClusterAPI'
 import type { settings } from '../../wailsjs/go/models'
 import type { RowAction } from './types'
+import { hue, initials } from './dom'
 
 export const clusterPrefs = ref<Record<string, settings.ClusterPrefs>>({})
 
@@ -21,6 +22,14 @@ export async function setPrefs(cluster: string, p: Partial<settings.ClusterPrefs
 }
 
 export const isProd = (c: string) => !!clusterPrefs.value[c]?.production
+
+// Display: short name and icon color chosen by the user (kubeconfig untouched).
+export const clusterLabel = (c: string) => clusterPrefs.value[c]?.alias || c
+export const clusterInitials = (c: string) => initials(clusterLabel(c))
+export const clusterBg = (c: string) => {
+  const h = clusterPrefs.value[c]?.color
+  return `hsl(${h !== undefined && h !== '' ? Number(h) : hue(c)} 55% 42%)`
+}
 export const isReadOnly = (c: string) => !!clusterPrefs.value[c]?.readOnly
 
 /** Actions that never change the cluster. */

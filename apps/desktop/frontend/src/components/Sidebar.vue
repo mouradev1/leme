@@ -7,11 +7,11 @@ import type { cluster, resources } from '../../wailsjs/go/models'
 import { useClusters } from '@/stores/clusters'
 import { loginNeeded, stateLabel, useRancher } from '@/stores/rancher'
 import { errMsg } from '@/lib/bridge'
-import { isProd, isReadOnly } from '@/lib/guard'
+import { clusterBg, clusterInitials, clusterLabel, isProd, isReadOnly } from '@/lib/guard'
 import { AppVersion, ApproveExec } from '../../wailsjs/go/api/ClusterAPI'
 import type { NavigateTarget, View } from '@/lib/types'
 import { objects, togglePin, type ObjRef } from '@/lib/recents'
-import { hue, initials, useDismiss } from '@/lib/dom'
+import { useDismiss } from '@/lib/dom'
 import { themePref, type ThemePref } from '@/lib/theme'
 import Icon from './Icon.vue'
 import { forwards } from '@/lib/forward'
@@ -183,7 +183,7 @@ const switcherRoot = ref<HTMLElement | null>(null)
 useDismiss(switcherRoot, () => (switcherOpen.value = false))
 const switcherList = computed(() => {
   const q = switcherQ.value.trim().toLowerCase()
-  return q ? contexts.value.filter((c) => c.name.toLowerCase().includes(q)) : contexts.value
+  return q ? contexts.value.filter((c) => `${c.name} ${clusterLabel(c.name)}`.toLowerCase().includes(q)) : contexts.value
 })
 function pick(name: string) {
   switcherOpen.value = false
@@ -227,12 +227,12 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
         :title="tr('Trocar de cluster (botão direito: desconectar)')" @click="switcherOpen = !switcherOpen"
         @contextmenu.prevent="emit('clusterMenu', $event, active)"
       >
-        <span class="relative grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-bold text-white" :style="{ background: `hsl(${hue(active)} 55% 42%)` }">
-          {{ initials(active) }}
+        <span class="relative grid h-7 w-7 shrink-0 place-items-center rounded-md text-[11px] font-bold text-white" :class="isProd(active) && 'ring-2 ring-rose-600 ring-offset-1 ring-offset-zinc-925'" :style="{ background: clusterBg(active) }">
+          {{ clusterInitials(active) }}
           <span class="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-zinc-925 bg-emerald-400" />
         </span>
         <span class="min-w-0 flex-1">
-          <span class="block truncate text-zinc-100">{{ active }}</span>
+          <span class="block truncate text-zinc-100" :title="active">{{ clusterLabel(active) }}</span>
           <span class="block truncate text-[11px] text-zinc-500">{{ activeCtx?.auth }} · {{ contexts.length }} clusters</span>
         </span>
         <Icon name="swap" :size="14" class="text-zinc-500" />
@@ -252,11 +252,12 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
             :class="c.name === active && 'text-sky-300'" @click="pick(c.name)"
             @contextmenu.prevent="switcherOpen = false; emit('clusterMenu', $event, c.name)"
           >
-            <span class="relative grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-bold text-white" :style="{ background: `hsl(${hue(c.name)} 55% 42%)` }">
-              {{ initials(c.name) }}
+            <span class="relative grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-bold text-white" :style="{ background: clusterBg(c.name) }">
+              {{ clusterInitials(c.name) }}
               <span v-if="c.connected" class="absolute -right-0.5 -bottom-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
             </span>
-            <span class="min-w-0 flex-1 truncate">{{ c.name }}</span>
+            <span class="min-w-0 flex-1 truncate" :title="c.name">{{ clusterLabel(c.name) }}</span>
+            <span v-if="isProd(c.name)" class="h-3 w-0.5 shrink-0 rounded bg-rose-500" :title="tr('Cluster de produção')" />
             <span v-if="connecting === c.name" class="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-400" />
           </button>
           <p v-if="!switcherList.length" class="px-3 py-2 text-xs text-zinc-500">{{ tr('Nenhum cluster.') }}</p>
@@ -268,20 +269,20 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
     <div v-show="clusterOpen && !compact" class="max-h-52 overflow-auto px-1.5 pb-2">
       <button
         v-for="c in contexts" :key="c.name"
-        class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/70"
+        class="group relative flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-800/70"
         :class="c.name === active && 'bg-zinc-800 text-zinc-50'"
-        :title="tr('{a}\nauth: {b}\n{c}\n\nBotão direito: conectar / desconectar', { a: c.server, b: c.auth, c: c.source })" @click="emit('openCluster', c.name)"
+        :title="`${c.name}${isProd(c.name) ? ` · ${tr('Produção')}` : ''}\n` + tr('{a}\nauth: {b}\n{c}\n\nBotão direito: conectar / desconectar', { a: c.server, b: c.auth, c: c.source })" @click="emit('openCluster', c.name)"
         @contextmenu.prevent="emit('clusterMenu', $event, c.name)"
       >
+        <span v-if="isProd(c.name)" class="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-rose-500" :title="tr('Cluster de produção')" />
         <span
           class="relative grid h-6 w-6 shrink-0 place-items-center rounded-md text-[10px] font-bold text-white"
-          :style="{ background: `hsl(${hue(c.name)} 55% 42%)` }"
+          :style="{ background: clusterBg(c.name) }"
         >
-          {{ initials(c.name) }}
+          {{ clusterInitials(c.name) }}
           <span v-if="c.connected" class="absolute -right-0.5 -bottom-0.5 h-2 w-2 rounded-full border-2 border-zinc-925 bg-emerald-400" />
         </span>
-        <span class="min-w-0 flex-1 truncate">{{ c.name }}</span>
-        <span v-if="isProd(c.name)" class="shrink-0 rounded bg-rose-600/90 px-1 text-[9px] font-semibold tracking-wide text-white uppercase" :title="tr('Cluster de produção')">{{ tr('prod') }}</span>
+        <span class="min-w-0 flex-1 truncate">{{ clusterLabel(c.name) }}</span>
         <span v-if="isReadOnly(c.name)" class="shrink-0 rounded bg-zinc-800 px-1 text-[9px] tracking-wide text-zinc-400 uppercase" :title="tr('Somente leitura: nada pode ser alterado')">{{ tr('leitura') }}</span>
         <span
           v-if="rancherOf(c)" class="shrink-0 rounded px-1 text-[9px] tracking-wide uppercase"

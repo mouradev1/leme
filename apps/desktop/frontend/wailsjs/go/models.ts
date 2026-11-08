@@ -950,6 +950,8 @@ export namespace settings {
 	export class ClusterPrefs {
 	    production?: boolean;
 	    readOnly?: boolean;
+	    alias?: string;
+	    color?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ClusterPrefs(source);
@@ -959,6 +961,8 @@ export namespace settings {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.production = source["production"];
 	        this.readOnly = source["readOnly"];
+	        this.alias = source["alias"];
+	        this.color = source["color"];
 	    }
 	}
 

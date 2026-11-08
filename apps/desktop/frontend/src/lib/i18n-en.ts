@@ -496,6 +496,12 @@ export const en: Record<string, string> = {
 
   'O cluster não respondeu: confira a VPN ou a rede e tente de novo.': "The cluster didn't answer: check your VPN or network and try again.",
 
+  'Nome e cor…': 'Name and color…',
+  'Nome e cor do cluster': 'Cluster name and color',
+  'Nome curto (só no Leme)': 'Short name (only in Leme)',
+  'Cor': 'Color',
+  'O kubeconfig não é alterado. Os atalhos e a paleta continuam aceitando o nome original.': 'The kubeconfig is not changed. Shortcuts and the palette still accept the original name.',
+
   // ---- Settings
   'Idioma': 'Language',
   'Português': 'Português',

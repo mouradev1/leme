@@ -33,6 +33,10 @@ type Settings struct {
 type ClusterPrefs struct {
 	Production bool `json:"production,omitempty"`
 	ReadOnly   bool `json:"readOnly,omitempty"`
+	// Display only (the kubeconfig is never changed): a short name and the
+	// hue (0-359) of the cluster's icon; empty = automatic.
+	Alias string `json:"alias,omitempty"`
+	Color string `json:"color,omitempty"`
 }
 
 // RancherServer is a Rancher the user added. Clusters is the last list seen,

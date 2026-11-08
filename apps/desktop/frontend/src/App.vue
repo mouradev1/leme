@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { tr } from '@/lib/i18n'
-import { isProd, isReadOnly, loadPrefs, setPrefs } from '@/lib/guard'
+import { clusterBg, clusterInitials, clusterLabel, isProd, isReadOnly, loadPrefs, setPrefs } from '@/lib/guard'
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { confirmKey, toastKey } from '@/lib/confirm'
 import { storeToRefs } from 'pinia'
@@ -36,11 +36,11 @@ import Icon from '@/components/Icon.vue'
 import CommandPalette, { type PaletteItem } from '@/components/CommandPalette.vue'
 import ShortcutsHelp from '@/components/ShortcutsHelp.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
+import ClusterLabelDialog from '@/components/ClusterLabelDialog.vue'
 import { objects } from '@/lib/recents'
 import { useClusters } from '@/stores/clusters'
 import { usePanelWidth } from '@/lib/resize'
 import { errMsg, newId, on } from '@/lib/bridge'
-import { hue, initials } from '@/lib/dom'
 import type { DockTab, NavigateTarget, NewDockTab, Row, RowAction, View } from '@/lib/types'
 
 const store = useClusters()
@@ -244,7 +244,8 @@ function openClusterMenu(e: MouseEvent, name: string) {
   else if (name !== active.value) items.push({ value: 'connect', label: tr('Abrir') })
   if (c.connected) items.push({ value: 'disconnect', label: tr('Desconectar'), danger: true, separatorBefore: items.length > 0 })
   items.push(
-    { value: 'prod', label: isProd(name) ? tr('Desmarcar produção') : tr('Marcar como produção'), separatorBefore: true },
+    { value: 'label', label: tr('Nome e cor…'), separatorBefore: true },
+    { value: 'prod', label: isProd(name) ? tr('Desmarcar produção') : tr('Marcar como produção') },
     { value: 'ro', label: isReadOnly(name) ? tr('Permitir alterações') : tr('Somente leitura') },
     { value: 'copy', label: tr('Copiar nome'), separatorBefore: true },
   )
@@ -253,6 +254,7 @@ function openClusterMenu(e: MouseEvent, name: string) {
     run: (v) => {
       if (v === 'connect') void openCluster(name)
       else if (v === 'disconnect') disconnectCluster(name)
+      else if (v === 'label') labelFor.value = name
       else if (v === 'prod') void setPrefs(name, { production: !isProd(name) }).then(() => flash(isProd(name) ? tr('{a} marcado como produção', { a: name }) : tr('{a} não é mais produção', { a: name })))
       else if (v === 'ro') void setPrefs(name, { readOnly: !isReadOnly(name) }).then(() => flash(isReadOnly(name) ? tr('{a} em somente leitura', { a: name }) : tr('{a} aceita alterações', { a: name })))
       else if (v === 'copy') void ClipboardSetText(name)
@@ -330,6 +332,7 @@ function createTemplate(k: resources.Kind): string {
 const showPalette = ref(false)
 const showHelp = ref(false)
 const showSettings = ref(false)
+const labelFor = ref('') // cluster whose name/color is being edited
 const isMac = /Mac/i.test(navigator.platform)
 const mod = isMac ? '⌘' : 'Ctrl+'
 
@@ -357,7 +360,7 @@ const paletteItems = computed<PaletteItem[]>(() => {
   out.push({ id: 'a:add', group: tr('Ações'), label: tr('Adicionar cluster (kubeconfig ou Rancher)'), icon: 'plus', run: () => { rancherKeyFor.value = ''; showKubeconfigs.value = true } })
   out.push({ id: 'a:settings', group: tr('Ações'), label: tr('Ajustes'), sub: 'English / Português', icon: 'sliders', run: () => (showSettings.value = true) })
   out.push({ id: 'a:help', group: tr('Ações'), label: tr('Atalhos de teclado'), icon: 'keyboard', keys: '?', run: () => (showHelp.value = true) })
-  for (const x of contexts.value) if (x.name !== c) out.push({ id: `c:${x.name}`, group: tr('Clusters'), label: x.name, sub: x.connected ? tr('conectado') : undefined, icon: 'monitor', run: () => void openCluster(x.name) })
+  for (const x of contexts.value) if (x.name !== c) out.push({ id: `c:${x.name}`, group: tr('Clusters'), label: clusterLabel(x.name), sub: [clusterLabel(x.name) !== x.name ? x.name : '', x.connected ? tr('conectado') : ''].filter(Boolean).join(' · ') || undefined, icon: 'monitor', run: () => void openCluster(x.name) })
   return out
 })
 
@@ -566,7 +569,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
       class="flex h-5 shrink-0 items-center justify-center gap-2 text-[10px] font-semibold tracking-[0.18em] uppercase"
       :class="isProd(active) ? 'bg-rose-700 text-rose-50' : 'bg-zinc-800 text-zinc-300'"
     >
-      <span v-if="isProd(active)">{{ tr('Produção') }} · {{ active }}</span>
+      <span v-if="isProd(active)">{{ tr('Produção') }} · {{ clusterLabel(active) }}</span>
       <span v-if="isReadOnly(active)">{{ isProd(active) ? '· ' : '' }}{{ tr('somente leitura') }}{{ isProd(active) ? '' : ` · ${active}` }}</span>
     </div>
     <div class="flex min-h-0 flex-1">
@@ -641,9 +644,9 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
                     class="group flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-left transition hover:border-sky-700 hover:bg-zinc-900"
                     @click="openCluster(c.name)" @contextmenu.prevent="openClusterMenu($event, c.name)"
                   >
-                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white" :style="{ background: `hsl(${hue(c.name)} 55% 42%)` }">{{ initials(c.name) }}</span>
+                    <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold text-white" :class="isProd(c.name) && 'ring-2 ring-rose-600 ring-offset-2 ring-offset-zinc-950'" :style="{ background: clusterBg(c.name) }">{{ clusterInitials(c.name) }}</span>
                     <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm text-zinc-100">{{ c.name }}</span>
+                      <span class="block truncate text-sm text-zinc-100" :title="c.name">{{ clusterLabel(c.name) }}</span>
                       <span class="block truncate text-xs text-zinc-500">{{ c.server }}</span>
                       <span class="mt-0.5 inline-block rounded bg-zinc-800 px-1.5 text-[10px] text-zinc-400">{{ c.auth }}</span>
                     </span>
@@ -710,6 +713,7 @@ const nsLabel = computed(() => (selectedNamespaces.value.length ? selectedNamesp
     />
     <ShortcutsHelp v-if="showHelp" @close="showHelp = false" />
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
+    <ClusterLabelDialog v-if="labelFor" :cluster="labelFor" @close="labelFor = ''" />
     <UpdateDialog v-if="showUpdate && updateInfo" :info="updateInfo" @close="showUpdate = false" />
     <KubeconfigManager v-if="showKubeconfigs" :rancher="rancherKeyFor || undefined" @close="showKubeconfigs = false; rancherKeyFor = ''" @changed="store.load()" @connect="openCluster" />
 

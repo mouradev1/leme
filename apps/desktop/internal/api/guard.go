@@ -3,8 +3,10 @@ package api
 import (
 	"errors"
 	"fmt"
-	"leme/internal/platform/i18n"
+	"strconv"
+	"strings"
 
+	"leme/internal/platform/i18n"
 	"leme/internal/platform/settings"
 )
 
@@ -21,6 +23,15 @@ func (a *ClusterAPI) ClusterPrefs() map[string]settings.ClusterPrefs {
 func (a *ClusterAPI) SetClusterPrefs(name string, prefs settings.ClusterPrefs) error {
 	if name == "" {
 		return errors.New(i18n.T(i18n.T("cluster sem nome", "cluster without a name"), "cluster without a name"))
+	}
+	prefs.Alias = strings.TrimSpace(prefs.Alias)
+	if len([]rune(prefs.Alias)) > 40 {
+		prefs.Alias = string([]rune(prefs.Alias)[:40])
+	}
+	if prefs.Color != "" {
+		if h, err := strconv.Atoi(prefs.Color); err != nil || h < 0 || h > 359 {
+			prefs.Color = ""
+		}
 	}
 	s := settings.Load()
 	if s.Clusters == nil {
