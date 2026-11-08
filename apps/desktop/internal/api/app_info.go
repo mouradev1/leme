@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"strings"
 	"time"
 
+	"leme/internal/platform/i18n"
 	"leme/internal/platform/settings"
+	"leme/internal/terminal"
 	"leme/internal/update"
 )
 
@@ -12,15 +15,21 @@ import (
 type AppAPI struct{ d *Deps }
 
 type Prefs struct {
-	UpdateCheck    bool   `json:"updateCheck"`
-	SkippedVersion string `json:"skippedVersion"`
+	UpdateCheck       bool   `json:"updateCheck"`
+	SkippedVersion    string `json:"skippedVersion"`
+	NodeShellEnabled  bool   `json:"nodeShellEnabled"`
+	NodeShellImage    string `json:"nodeShellImage"` // "" = default
+	DefaultShellImage string `json:"defaultShellImage"`
 }
 
 func (a *AppAPI) Version() string { return a.d.Version }
 
 func (a *AppAPI) Prefs() Prefs {
 	s := settings.Load()
-	return Prefs{UpdateCheck: !s.UpdateCheckDisabled, SkippedVersion: s.SkippedVersion}
+	return Prefs{
+		UpdateCheck: !s.UpdateCheckDisabled, SkippedVersion: s.SkippedVersion,
+		NodeShellEnabled: !s.NodeShellDisabled, NodeShellImage: s.NodeShellImage, DefaultShellImage: terminal.DefaultNodeShellImage,
+	}
 }
 
 func (a *AppAPI) SetUpdateCheck(enabled bool) error {
@@ -58,3 +67,19 @@ func (a *AppAPI) CheckUpdate(auto bool) (update.Info, error) {
 	}
 	return info, nil
 }
+
+// SetNodeShell turns the node shell on/off and sets its image ("" = default).
+func (a *AppAPI) SetNodeShell(enabled bool, image string) error {
+	image = strings.TrimSpace(image)
+	if image != "" {
+		if err := terminal.ValidNodeShellImage(image); err != nil {
+			return err
+		}
+	}
+	s := settings.Load()
+	s.NodeShellDisabled, s.NodeShellImage = !enabled, image
+	return settings.Save(s)
+}
+
+// SetLanguage switches backend messages between Portuguese and English.
+func (a *AppAPI) SetLanguage(lang string) { i18n.Set(lang) }

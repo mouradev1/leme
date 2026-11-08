@@ -2,7 +2,10 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"leme/internal/platform/i18n"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -20,10 +23,24 @@ import (
 // the shell ends; activeDeadlineSeconds is the last-resort cleanup.
 const (
 	nodeShellNamespace = "kube-system" // usually allowed to run privileged pods (Pod Security)
-	nodeShellImage     = "docker.io/library/busybox:1.36"
 	nodeShellLabel     = "leme.dev/node-shell"
 	nodeShellMaxAge    = 8 * 60 * 60 // seconds
 )
+
+// DefaultNodeShellImage is pinned by digest: a moved tag can never swap the
+// image that runs privileged on a node. Companies can point to a mirror in
+// their own registry (also pinned by digest), see ValidNodeShellImage.
+const DefaultNodeShellImage = "docker.io/library/busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
+
+var digestRef = regexp.MustCompile(`^[a-z0-9]([a-z0-9._/:-]*[a-z0-9])?@sha256:[a-f0-9]{64}$`)
+
+// ValidNodeShellImage requires a full image reference pinned by digest.
+func ValidNodeShellImage(img string) error {
+	if !digestRef.MatchString(img) {
+		return errors.New(i18n.T(i18n.T("use uma imagem fixada por digest, ex.: registry.empresa.com/busybox:1.36@sha256:<64 hex>", "use an image pinned by digest, e.g. registry.example.com/busybox:1.36@sha256:<64 hex>"), "use an image pinned by digest, e.g. registry.example.com/busybox:1.36@sha256:<64 hex>"))
+	}
+	return nil
+}
 
 // nodeShellCommand runs inside the pod: switch to the host's mount, UTS, IPC,
 // network and PID namespaces, then start the host's own shell.
@@ -32,7 +49,7 @@ var nodeShellCommand = []string{
 	"sh", "-c", "if [ -x /bin/bash ]; then exec /bin/bash -l; else exec /bin/sh -l; fi",
 }
 
-func nodeShellPod(node string) *corev1.Pod {
+func nodeShellPod(node, image string) *corev1.Pod {
 	zero := int64(0)
 	deadline := int64(nodeShellMaxAge)
 	privileged := true
@@ -58,7 +75,7 @@ func nodeShellPod(node string) *corev1.Pod {
 			Tolerations:                   []corev1.Toleration{{Operator: corev1.TolerationOpExists}}, // tainted / cordoned nodes too
 			Containers: []corev1.Container{{
 				Name:            "shell",
-				Image:           nodeShellImage,
+				Image:           image,
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         []string{"sh", "-c", "while true; do sleep 3600; done"},
 				SecurityContext: &corev1.SecurityContext{Privileged: &privileged},
@@ -69,16 +86,16 @@ func nodeShellPod(node string) *corev1.Pod {
 
 // NodeShell opens a root shell on a node. Progress is written to the
 // terminal while the helper pod starts.
-func NodeShell(s *cluster.Session, node string, cols, rows uint16) Starter {
+func NodeShell(s *cluster.Session, node, image string, cols, rows uint16) Starter {
 	return func(out func([]byte), done func(error)) (Session, error) {
 		say := func(format string, a ...any) { out([]byte(fmt.Sprintf("\x1b[90m"+format+"\x1b[0m\r\n", a...))) }
 		ctx := s.Ctx()
 
-		say("Criando pod privilegiado temporário no node %s (%s)...", node, nodeShellNamespace)
-		pod, err := s.Kube.CoreV1().Pods(nodeShellNamespace).Create(ctx, nodeShellPod(node), metav1.CreateOptions{})
+		say(i18n.T("Criando pod privilegiado temporário no node %s (%s)...", "Creating a temporary privileged pod on node %s (%s)..."), node, nodeShellNamespace)
+		pod, err := s.Kube.CoreV1().Pods(nodeShellNamespace).Create(ctx, nodeShellPod(node, image), metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsForbidden(err) {
-				return nil, fmt.Errorf("sem permissão para criar pods privilegiados em %s: %w", nodeShellNamespace, err)
+				return nil, fmt.Errorf(i18n.T("sem permissão para criar pods privilegiados em %s: %w", "no permission to create privileged pods in %s: %w"), nodeShellNamespace, err)
 			}
 			return nil, err
 		}
@@ -92,11 +109,11 @@ func NodeShell(s *cluster.Session, node string, cols, rows uint16) Starter {
 			})
 		}
 
-		if err := waitRunning(ctx, s.Kube, pod.Name, say); err != nil {
+		if err := waitRunning(ctx, s.Kube, pod.Name, image, say); err != nil {
 			cleanup()
 			return nil, err
 		}
-		say("Conectado ao node %s como root. O pod %s é removido ao fechar este terminal.", node, pod.Name)
+		say(i18n.T("Conectado ao node %s como root. O pod %s é removido ao fechar este terminal.", "Connected to node %s as root. Pod %s is removed when this terminal closes."), node, pod.Name)
 
 		inner, err := Exec(s, ExecTarget{Namespace: nodeShellNamespace, Pod: pod.Name, Container: "shell", Command: nodeShellCommand}, cols, rows)(
 			out, func(e error) { cleanup(); done(e) })
@@ -119,7 +136,7 @@ func (n *nodeShellSession) Close() error {
 	return err
 }
 
-func waitRunning(ctx context.Context, kube kubernetes.Interface, name string, say func(string, ...any)) error {
+func waitRunning(ctx context.Context, kube kubernetes.Interface, name, image string, say func(string, ...any)) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	lastReason := ""
@@ -141,13 +158,13 @@ func waitRunning(ctx context.Context, kube kubernetes.Interface, name string, sa
 					say("Aguardando: %s", w.Reason)
 				}
 				if strings.Contains(w.Reason, "ImagePull") || w.Reason == "ErrImageNeverPull" || w.Reason == "InvalidImageName" {
-					return fmt.Errorf("não foi possível baixar a imagem %s no node (o cluster tem acesso ao Docker Hub?): %s", nodeShellImage, w.Message)
+					return fmt.Errorf(i18n.T("não foi possível baixar a imagem %s no node (o cluster tem acesso a esse registry? Dá para usar um espelho interno nas configurações): %s", "could not pull image %s on the node (can the cluster reach that registry? You can use an internal mirror in Settings): %s"), image, w.Message)
 				}
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("o pod auxiliar não iniciou a tempo no node (%s)", lastReason)
+			return fmt.Errorf(i18n.T("o pod auxiliar não iniciou a tempo no node (%s)", "the helper pod did not start on the node in time (%s)"), lastReason)
 		case <-time.After(time.Second):
 		}
 	}
