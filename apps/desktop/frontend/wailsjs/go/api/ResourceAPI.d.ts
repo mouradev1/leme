@@ -29,7 +29,13 @@ export function RefreshCatalog(arg1:string):Promise<Array<resources.Kind>>;
 
 export function Restart(arg1:string,arg2:resources.Ref,arg3:string,arg4:string):Promise<void>;
 
+export function Rollout(arg1:string,arg2:string,arg3:string):Promise<ops.Rollout>;
+
+export function RolloutUndo(arg1:string,arg2:string,arg3:string,arg4:number):Promise<number>;
+
 export function Scale(arg1:string,arg2:resources.Ref,arg3:string,arg4:string,arg5:number):Promise<void>;
+
+export function Search(arg1:string,arg2:Array<string>,arg3:string):Promise<Array<resources.SearchHit>>;
 
 export function SetData(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Record<string, string>,arg6:string):Promise<string>;
 

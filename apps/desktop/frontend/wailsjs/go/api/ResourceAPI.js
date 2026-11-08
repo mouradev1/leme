@@ -50,8 +50,20 @@ export function Restart(arg1, arg2, arg3, arg4) {
   return window['go']['api']['ResourceAPI']['Restart'](arg1, arg2, arg3, arg4);
 }
 
+export function Rollout(arg1, arg2, arg3) {
+  return window['go']['api']['ResourceAPI']['Rollout'](arg1, arg2, arg3);
+}
+
+export function RolloutUndo(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['ResourceAPI']['RolloutUndo'](arg1, arg2, arg3, arg4);
+}
+
 export function Scale(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['api']['ResourceAPI']['Scale'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function Search(arg1, arg2, arg3) {
+  return window['go']['api']['ResourceAPI']['Search'](arg1, arg2, arg3);
 }
 
 export function SetData(arg1, arg2, arg3, arg4, arg5, arg6) {

@@ -12,4 +12,6 @@ export function Rollback(arg1:string,arg2:string,arg3:string,arg4:number):Promis
 
 export function Uninstall(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function Upgrade(arg1:string,arg2:helm.UpgradeRequest):Promise<helm.Release>;
+
 export function Values(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<string>;
