@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { tr } from '@/lib/i18n'
+import { allowedIn, isReadOnly } from '@/lib/guard'
+import { addRecent } from '@/lib/recents'
 /**
  * Generic, virtualized resource list for ANY kind (built-in or CRD).
  * Columns come from the API server's Table printer (same as `kubectl get`);
@@ -28,13 +31,14 @@ import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 import DetailsDrawer from './DetailsDrawer.vue'
 import PeekDrawer from './PeekDrawer.vue'
 
-const props = defineProps<{ cluster: string; kind: resources.Kind }>()
+const props = withDefaults(defineProps<{ cluster: string; kind: resources.Kind; focus?: string; focused?: boolean }>(), { focused: true })
 const emit = defineEmits<{
   action: [action: RowAction, row: Row, kind: resources.Kind]
   bulkDelete: [rows: Row[]]
   navigate: [target: NavigateTarget]
   create: []
   container: [action: 'logs' | 'previous' | 'shell', container: string, row: Row]
+  focusDone: []
 }>()
 const search = defineModel<string>('search', { default: '' })
 
@@ -126,7 +130,7 @@ function serverCol(c: Column, i: number): ColumnDef<Row, unknown> {
   }
   if (isPods.value && c.name === 'Node') {
     return { id, header: c.name, accessorFn, sortingFn: smartSort,
-      cell: ({ getValue }) => { const v = fmt(getValue()); return v && v !== '<none>' ? link(v, () => openPeek({ kind: 'Node', search: v }), `Ver detalhes do node ${v}`) : '' } }
+      cell: ({ getValue }) => { const v = fmt(getValue()); return v && v !== '<none>' ? link(v, () => openPeek({ kind: 'Node', search: v }), tr('Ver detalhes do node {a}', { a: v })) : '' } }
   }
   return { id, header: c.name, accessorFn, sortingFn: smartSort, cell: ({ getValue }) => fmt(getValue()) }
 }
@@ -143,7 +147,7 @@ const columnDefs = computed<ColumnDef<Row, unknown>[]>(() => {
   ]
   if (props.kind.namespaced) {
     d.push({ id: 'namespace', header: 'Namespace', accessorFn: (r) => r.namespace ?? '',
-      cell: ({ row }) => link(row.original.namespace ?? '', () => (selectedNamespaces.value = [row.original.namespace!]), 'Filtrar por este namespace') })
+      cell: ({ row }) => link(row.original.namespace ?? '', () => (selectedNamespaces.value = [row.original.namespace!]), tr('Filtrar por este namespace')) })
   }
   if (metricsScope.value && metricsOk.value) {
     d.push(
@@ -160,7 +164,7 @@ const columnDefs = computed<ColumnDef<Row, unknown>[]>(() => {
     d.push({ id: 'owner', header: 'Controlled By', accessorFn: (r) => (r.owner ? `${r.owner.kind}/${r.owner.name}` : ''),
       cell: ({ row }) => {
         const o = row.original.owner
-        return o ? link(o.kind, () => openPeek({ kind: o.kind, search: o.name, namespace: row.original.namespace }), `Ver detalhes de ${o.kind}/${o.name}`) : ''
+        return o ? link(o.kind, () => openPeek({ kind: o.kind, search: o.name, namespace: row.original.namespace }), tr('Ver detalhes de {a}/{b}', { a: o.kind, b: o.name })) : ''
       } })
   }
   d.push(
@@ -244,6 +248,21 @@ const selectedUid = ref('')
 const snapshot = ref<Row | null>(null)
 const liveSelected = computed(() => (selectedUid.value ? rows.value.find((r) => r.uid === selectedUid.value) ?? null : null))
 watch(liveSelected, (r) => r && (snapshot.value = r))
+watch(() => liveSelected.value?.uid, () => {
+  const r = liveSelected.value
+  if (r) addRecent(props.cluster, { kind: props.kind.kind, name: r.name, namespace: r.namespace ?? '' })
+})
+
+// Open one object's details when asked (palette, problems list, recents).
+watch([() => props.focus, rows], () => {
+  if (!props.focus) return
+  const r = rows.value.find((x) => `${x.namespace ?? ''}/${x.name}` === props.focus)
+  if (!r) return
+  peek.value = null
+  selectedUid.value = r.uid
+  snapshot.value = r
+  emit('focusDone')
+})
 const detailsRow = computed(() => liveSelected.value ?? (selectedUid.value ? snapshot.value : null))
 
 // Peek: details of a linked object (a pod's node, its owner, a volume's
@@ -274,8 +293,8 @@ function openMenu(e: MouseEvent, row: Row) {
 }
 const menuItems = computed<MenuItem<RowAction>[]>(() => {
   if (!menu.value) return []
-  return (['details', ...actionsFor(props.kind, menu.value.row)] as RowAction[]).map((a) => ({
-    value: a, label: actionLabel[a], danger: dangerous.has(a), separatorBefore: a === 'delete',
+  return (['details', ...allowedIn(props.cluster, actionsFor(props.kind, menu.value.row))] as RowAction[]).map((a) => ({
+    value: a, label: tr(actionLabel[a]), danger: dangerous.has(a), separatorBefore: a === 'delete',
   }))
 })
 
@@ -291,11 +310,38 @@ function bulkDelete() {
   rowSelection.value = {}
 }
 
+// Keyboard (only in the focused pane, never while typing):
+// up/down or j/k move the selection, / searches, l s e f run actions, Delete deletes.
+const searchBox = ref<{ focus: () => void } | null>(null)
+const KEY_ACTION: Record<string, RowAction> = { l: 'logs', s: 'shell', e: 'edit', f: 'portforward', Delete: 'delete', Backspace: 'delete' }
+function move(step: number) {
+  const list = tableRows.value
+  if (!list.length) return
+  const i = list.findIndex((r) => r.original.uid === selectedUid.value)
+  const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + step))]
+  peek.value = null
+  selectedUid.value = next.original.uid
+  snapshot.value = next.original
+  virtualizer.value.scrollToIndex(list.indexOf(next), { align: 'auto' })
+}
 function onKey(e: KeyboardEvent) {
-  const typing = (e.target as HTMLElement)?.closest('input,textarea,.monaco-editor,.xterm')
-  if (e.key !== 'Escape' || typing || menu.value || colMenu.value) return
-  if (peek.value) peek.value = null
-  else selectedUid.value = ''
+  if (!props.focused || menu.value || colMenu.value) return
+  const typing = (e.target as HTMLElement)?.closest('input,textarea,select,.monaco-editor,.xterm')
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+  if (e.key === 'Escape') {
+    if (peek.value) peek.value = null
+    else selectedUid.value = ''
+    return
+  }
+  if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); return move(1) }
+  if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); return move(-1) }
+  if (e.key === '/') { e.preventDefault(); return searchBox.value?.focus() }
+  const a = KEY_ACTION[e.key]
+  const row = liveSelected.value
+  if (!a || !row) return
+  if (!allowedIn(props.cluster, actionsFor(props.kind, row)).includes(a)) return
+  e.preventDefault()
+  onAction(a, row)
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 
@@ -322,12 +368,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <span class="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400 tabular-nums">
           {{ filtered.length }}<template v-if="filtered.length !== rows.length"> / {{ rows.length }}</template>
         </span>
-        <span v-if="loading" class="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-400" title="Carregando…" />
-        <span v-if="metricsScope && !metricsOk" class="text-[11px] text-zinc-600" title="metrics-server não encontrado no cluster">sem métricas</span>
+        <span v-if="loading" class="h-3 w-3 animate-spin rounded-full border-2 border-zinc-600 border-t-sky-400" :title="tr('Carregando…')" />
+        <span v-if="metricsScope && !metricsOk" class="text-[11px] text-zinc-600" :title="tr('metrics-server não encontrado no cluster')">{{ tr('sem métricas') }}</span>
         <div class="ml-auto flex min-w-[420px] flex-1 items-center justify-end gap-2">
-          <NamespaceSelect v-model="selectedNamespaces" :options="namespaces" :disabled="!kind.namespaced" />
+          <NamespaceSelect v-model="selectedNamespaces" :options="namespaces" :projects="store.projects" :disabled="!kind.namespaced" />
           <div class="flex max-w-md min-w-0 flex-1">
             <SearchBox
+              ref="searchBox" :shortcut="focused"
               v-model="search" v-model:case-sensitive="caseSensitive" v-model:regex="regex"
               :placeholder="`Buscar ${kind.kind}…`" :error="matcher?.error"
             />
@@ -337,9 +384,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
       <!-- Bulk actions -->
       <div v-if="selectedRows.length" class="flex items-center gap-3 border-b border-sky-900/50 bg-sky-950/30 px-4 py-1.5 text-xs">
-        <span class="text-sky-200">{{ selectedRows.length }} selecionado(s)</span>
-        <button v-if="kind.verbs.includes('delete')" class="rounded border border-rose-900 px-2 py-0.5 text-rose-300 hover:bg-rose-950" @click="bulkDelete">Excluir</button>
-        <button class="text-zinc-400 hover:text-zinc-200" @click="rowSelection = {}">Limpar seleção</button>
+        <span class="text-sky-200">{{ tr('{n} selecionado(s)', { n: selectedRows.length }) }}</span>
+        <button v-if="kind.verbs.includes('delete')" class="rounded border border-rose-900 px-2 py-0.5 text-rose-300 hover:bg-rose-950" @click="bulkDelete">{{ tr('Excluir') }}</button>
+        <button class="text-zinc-400 hover:text-zinc-200" @click="rowSelection = {}">{{ tr('Limpar seleção') }}</button>
       </div>
       <div v-if="error" class="border-b border-rose-900/50 bg-rose-950/40 px-4 py-1.5 text-xs text-rose-300">{{ error }}</div>
 
@@ -381,11 +428,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
           <div v-if="!loading && !filtered.length" class="grid place-items-center py-24 text-center text-sm text-zinc-500">
             <div>
-              <p class="text-zinc-300">Nenhum {{ kind.kind }} encontrado</p>
-              <p v-if="search" class="mt-1 text-xs">Nada corresponde a “{{ search }}”.
-                <button class="text-sky-400 hover:underline" @click="search = ''">Limpar busca</button></p>
-              <p v-else-if="selectedNamespaces.length && kind.namespaced" class="mt-1 text-xs">Filtrando {{ selectedNamespaces.join(', ') }}.
-                <button class="text-sky-400 hover:underline" @click="selectedNamespaces = []">Ver todos os namespaces</button></p>
+              <p class="text-zinc-300">{{ tr('Nenhum {k} encontrado', { k: kind.kind }) }}</p>
+              <p v-if="search" class="mt-1 text-xs">{{ tr('Nada corresponde a “{q}”.', { q: search }) }}
+                <button class="text-sky-400 hover:underline" @click="search = ''">{{ tr('Limpar busca') }}</button></p>
+              <p v-else-if="selectedNamespaces.length && kind.namespaced" class="mt-1 text-xs">{{ tr('Filtrando {ns}.', { ns: selectedNamespaces.join(', ') }) }}
+                <button class="text-sky-400 hover:underline" @click="selectedNamespaces = []">{{ tr('Ver todos os namespaces') }}</button></p>
             </div>
           </div>
         </div>
@@ -409,7 +456,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     />
 
     <button
-      v-if="kind.verbs.includes('create') && !detailsRow && !peek"
+      v-if="kind.verbs.includes('create') && !detailsRow && !peek && !isReadOnly(cluster)"
       class="absolute right-6 bottom-6 z-20 grid h-11 w-11 place-items-center rounded-full bg-sky-500 text-2xl leading-none text-white shadow-lg shadow-sky-900/50 transition hover:scale-105 hover:bg-sky-400"
       :title="`Criar ${kind.kind}`" @click="emit('create')"
     >+</button>
@@ -423,7 +470,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <Teleport to="body">
       <div v-if="colMenu" class="fixed inset-0 z-[55]" @mousedown.self="colMenu = null">
         <div class="absolute w-56 rounded-lg border border-zinc-800 bg-zinc-900 py-1 text-xs shadow-2xl shadow-black/60" :style="{ left: `${Math.max(8, colMenu.x)}px`, top: `${colMenu.y}px` }">
-          <div class="px-3 pt-1 pb-2 text-[11px] text-zinc-500">Colunas visíveis</div>
+          <div class="px-3 pt-1 pb-2 text-[11px] text-zinc-500">{{ tr('Colunas visíveis') }}</div>
           <label
             v-for="c in table.getAllLeafColumns().filter((c) => c.getCanHide())" :key="c.id"
             class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-zinc-800"
@@ -432,7 +479,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             {{ typeof c.columnDef.header === 'string' ? c.columnDef.header : c.id }}
           </label>
           <div class="mt-1 border-t border-zinc-800 px-3 pt-2 pb-1">
-            <button class="text-zinc-400 hover:text-zinc-100" @click="table.setColumnVisibility({})">Restaurar padrão</button>
+            <button class="text-zinc-400 hover:text-zinc-100" @click="table.setColumnVisibility({})">{{ tr('Restaurar padrão') }}</button>
           </div>
         </div>
       </div>

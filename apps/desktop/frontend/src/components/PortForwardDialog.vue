@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Choose a remote port and (optionally) a local port, then forward. */
+import { tr } from '@/lib/i18n'
 import { computed, onMounted, ref } from 'vue'
 import { BrowserOpenURL, ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import { ServicePorts, Start } from '../../wailsjs/go/api/PortForwardAPI'
@@ -74,22 +75,22 @@ async function start() {
       <div class="flex items-center gap-2 border-b border-zinc-800 px-5 py-3">
         <Icon name="forward" :size="16" class="text-sky-300" />
         <h2 class="min-w-0 flex-1 truncate font-semibold text-zinc-100">Port-forward · {{ target.kind === 'service' ? 'Service' : 'Pod' }} {{ target.name }}</h2>
-        <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Fechar" @click="emit('close')"><Icon name="close" :size="14" /></button>
+        <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="tr('Fechar')" @click="emit('close')"><Icon name="close" :size="14" /></button>
       </div>
 
       <div class="space-y-4 px-5 py-4 text-xs">
         <div>
-          <div class="mb-1.5 text-zinc-400">Porta {{ target.kind === 'service' ? 'do service' : 'do container' }}</div>
-          <p v-if="loading" class="text-zinc-500">carregando portas…</p>
+          <div class="mb-1.5 text-zinc-400">Porta {{ target.kind === 'service' ? tr('do service') : tr('do container') }}</div>
+          <p v-if="loading" class="text-zinc-500">{{ tr('carregando portas…') }}</p>
           <div v-else class="space-y-1">
             <label v-for="o in options" :key="o.port" class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-zinc-800">
               <input v-model="remote" type="radio" :value="o.port" class="accent-sky-500" />
               <span class="font-mono text-zinc-200">{{ o.label }}</span>
             </label>
             <label class="flex items-center gap-2 px-2 py-1.5 text-zinc-400">
-              outra porta
+              {{ tr('outra porta') }}
               <input
-                type="number" min="1" max="65535" placeholder="ex: 8080"
+                type="number" min="1" max="65535" :placeholder="tr('ex: 8080')"
                 class="h-7 w-28 rounded-md border border-zinc-800 bg-zinc-950 px-2 font-mono text-zinc-200 outline-none focus:border-sky-600"
                 @input="remote = Number(($event.target as HTMLInputElement).value) || null"
               />
@@ -98,24 +99,24 @@ async function start() {
         </div>
 
         <div>
-          <div class="mb-1.5 text-zinc-400">Porta local (no seu computador)</div>
+          <div class="mb-1.5 text-zinc-400">{{ tr('Porta local (no seu computador)') }}</div>
           <input
-            v-model.number="local" type="number" min="1" max="65535" placeholder="automática"
+            v-model.number="local" type="number" min="1" max="65535" :placeholder="tr('automática')"
             class="h-8 w-40 rounded-md border border-zinc-800 bg-zinc-950 px-2 font-mono text-zinc-200 outline-none focus:border-sky-600"
             @input="local = Number(($event.target as HTMLInputElement).value) || null"
           />
-          <p class="mt-1 text-zinc-500">Só acessível nesta máquina (127.0.0.1). O endereço é copiado ao iniciar.</p>
+          <p class="mt-1 text-zinc-500">{{ tr('Só acessível nesta máquina (127.0.0.1). O endereço é copiado ao iniciar.') }}</p>
         </div>
 
         <label class="flex cursor-pointer items-center gap-2 text-zinc-300">
-          <input v-model="openBrowser" type="checkbox" class="accent-sky-500" /> Abrir no navegador
+          <input v-model="openBrowser" type="checkbox" class="accent-sky-500" /> {{ tr('Abrir no navegador') }}
         </label>
 
         <p v-if="error" class="rounded-md border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-rose-300">{{ error }}</p>
       </div>
 
       <div class="flex justify-end gap-2 border-t border-zinc-800 px-5 py-3">
-        <button class="rounded-md bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700" @click="emit('close')">Cancelar</button>
+        <button class="rounded-md bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700" @click="emit('close')">{{ tr('Cancelar') }}</button>
         <button class="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50" :disabled="!valid || busy" @click="start">
           {{ busy ? 'Conectando…' : 'Iniciar' }}
         </button>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Active port-forwards across all clusters. */
+import { tr } from '@/lib/i18n'
 import { onBeforeUnmount, ref } from 'vue'
 import { BrowserOpenURL, ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import { Start, Stop } from '../../wailsjs/go/api/PortForwardAPI'
@@ -20,7 +21,7 @@ async function restart(f: portforward.Forward) {
       namespace: f.namespace, kind: f.kind, name: f.name, remotePort: f.remotePort, localPort: f.localPort,
     }))
     await Stop(f.id)
-    emit('toast', `Reconectado em ${forwardURL(f)}`)
+    emit('toast', tr('Reconectado em {a}', { a: forwardURL(f) }))
   } catch (e) {
     emit('toast', errMsg(e))
   }
@@ -34,42 +35,42 @@ function copy(f: portforward.Forward) {
 <template>
   <div class="flex h-full min-w-0 flex-col">
     <div class="flex items-center gap-2 border-b border-zinc-800/80 px-4 py-2.5">
-      <h1 class="text-[15px] font-semibold text-zinc-100">Port Forwards</h1>
+      <h1 class="text-[15px] font-semibold text-zinc-100">{{ tr('Port Forwards') }}</h1>
       <span class="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-400">{{ forwards.length }}</span>
-      <span class="ml-auto text-xs text-zinc-500">Inicie pelo painel de um pod (porta do container) ou de um service. Todos param ao fechar o Leme.</span>
+      <span class="ml-auto text-xs text-zinc-500">{{ tr('Inicie pelo painel de um pod (porta do container) ou de um service. Todos param ao fechar o Leme.') }}</span>
     </div>
     <div class="min-h-0 flex-1 overflow-auto">
       <table class="w-full text-[13px]">
         <thead class="sticky top-0 bg-zinc-925 text-left text-[11px] font-medium text-zinc-400">
           <tr class="border-b border-zinc-800">
-            <th class="px-4 py-2.5">Endereço local</th><th class="px-3">Destino</th><th class="px-3">Pod</th>
-            <th class="px-3">Cluster</th><th class="px-3">Estado</th><th class="px-3">Há</th><th class="px-3" />
+            <th class="px-4 py-2.5">{{ tr('Endereço local') }}</th><th class="px-3">{{ tr('Destino') }}</th><th class="px-3">{{ tr('Pod') }}</th>
+            <th class="px-3">{{ tr('Cluster') }}</th><th class="px-3">{{ tr('Estado') }}</th><th class="px-3">{{ tr('Há') }}</th><th class="px-3" />
           </tr>
         </thead>
         <tbody>
           <tr v-for="f in forwards" :key="f.id" class="border-b border-zinc-800/50 hover:bg-zinc-800/40">
             <td class="px-4 py-2">
-              <button class="font-mono text-sky-400 hover:underline" title="Abrir no navegador" @click="BrowserOpenURL(forwardURL(f))">localhost:{{ f.localPort }}</button>
+              <button class="font-mono text-sky-400 hover:underline" :title="tr('Abrir no navegador')" @click="BrowserOpenURL(forwardURL(f))">localhost:{{ f.localPort }}</button>
             </td>
             <td class="px-3"><span class="text-zinc-400">{{ f.kind === 'service' ? 'svc' : 'pod' }}/</span>{{ f.name }}<span class="text-zinc-500">:{{ f.remotePort }}</span> <span class="text-zinc-600">({{ f.namespace }})</span></td>
             <td class="px-3 text-zinc-400">{{ f.pod }}<span v-if="f.podPort !== f.remotePort" class="text-zinc-600">:{{ f.podPort }}</span></td>
             <td class="px-3 text-zinc-400">{{ f.cluster }}</td>
             <td class="px-3">
-              <span v-if="f.state === 'active'" class="text-emerald-400">ativo</span>
-              <span v-else class="text-rose-400" :title="f.error">parou</span>
+              <span v-if="f.state === 'active'" class="text-emerald-400">{{ tr('ativo') }}</span>
+              <span v-else class="text-rose-400" :title="f.error">{{ tr('parou') }}</span>
             </td>
             <td class="px-3 text-zinc-500">{{ age(Date.parse(f.started), now) }}</td>
             <td class="px-3">
               <div class="flex justify-end gap-1">
-                <button v-if="f.state !== 'active'" class="act" title="Reconectar (o pod pode ter sido recriado)" @click="restart(f)"><Icon name="refresh" :size="14" /></button>
-                <button class="act" title="Copiar endereço" @click="copy(f)"><Icon name="logs" :size="14" /></button>
-                <button class="act hover:!text-rose-300" title="Parar" @click="Stop(f.id)"><Icon name="close" :size="14" /></button>
+                <button v-if="f.state !== 'active'" class="act" :title="tr('Reconectar (o pod pode ter sido recriado)')" @click="restart(f)"><Icon name="refresh" :size="14" /></button>
+                <button class="act" :title="tr('Copiar endereço')" @click="copy(f)"><Icon name="logs" :size="14" /></button>
+                <button class="act hover:!text-rose-300" :title="tr('Parar')" @click="Stop(f.id)"><Icon name="close" :size="14" /></button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
-      <p v-if="!forwards.length" class="py-20 text-center text-sm text-zinc-500">Nenhum port-forward ativo.</p>
+      <p v-if="!forwards.length" class="py-20 text-center text-sm text-zinc-500">{{ tr('Nenhum port-forward ativo.') }}</p>
     </div>
   </div>
 </template>

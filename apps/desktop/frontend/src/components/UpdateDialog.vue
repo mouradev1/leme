@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** "New version available" notice. Download opens the release page in the browser. */
+import { tr } from '@/lib/i18n'
 import { computed, onMounted, ref } from 'vue'
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { Prefs, SetUpdateCheck, SkipVersion } from '../../wailsjs/go/api/AppAPI'
@@ -45,29 +46,29 @@ async function skip() {
       <div class="flex items-start gap-3 px-5 pt-5">
         <div class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-sky-500/15 text-sky-300"><Icon name="drain" :size="20" /></div>
         <div class="min-w-0 flex-1">
-          <h2 class="font-semibold text-zinc-100">Nova versão do Leme disponível</h2>
+          <h2 class="font-semibold text-zinc-100">{{ tr('Nova versão do Leme disponível') }}</h2>
           <p class="mt-0.5 text-xs text-zinc-400">
-            <span class="font-mono text-sky-300">v{{ info.latest }}</span> · você usa
+            <span class="font-mono text-sky-300">v{{ info.latest }}</span> {{ tr('· você usa') }}
             <span class="font-mono">{{ info.current === 'dev' ? 'dev' : `v${info.current}` }}</span>
           </p>
         </div>
-        <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Fechar" @click="emit('close')">
+        <button class="grid h-7 w-7 place-items-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" :title="tr('Fechar')" @click="emit('close')">
           <Icon name="close" :size="14" />
         </button>
       </div>
 
       <div v-if="notes" class="mx-5 mt-4">
-        <div class="mb-1.5 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase">Novidades</div>
+        <div class="mb-1.5 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase">{{ tr('Novidades') }}</div>
         <pre class="max-h-52 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-sans text-xs leading-relaxed whitespace-pre-wrap text-zinc-300 select-text">{{ notes }}</pre>
       </div>
 
       <div class="mt-5 flex items-center gap-2 border-t border-zinc-800 px-5 py-3">
         <label class="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-400">
-          <input v-model="notify" type="checkbox" class="accent-sky-500" @change="toggleNotify" /> Avisar sobre novas versões
+          <input v-model="notify" type="checkbox" class="accent-sky-500" @change="toggleNotify" /> {{ tr('Avisar sobre novas versões') }}
         </label>
-        <button class="ml-auto rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" @click="skip">Pular esta versão</button>
-        <button class="rounded-md bg-zinc-800 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700" @click="emit('close')">Depois</button>
-        <button class="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500" @click="download">Baixar</button>
+        <button class="ml-auto rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" @click="skip">{{ tr('Pular esta versão') }}</button>
+        <button class="rounded-md bg-zinc-800 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700" @click="emit('close')">{{ tr('Depois') }}</button>
+        <button class="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500" @click="download">{{ tr('Baixar') }}</button>
       </div>
     </div>
   </div>

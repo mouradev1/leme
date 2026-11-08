@@ -4,6 +4,7 @@
  * its selector) or the pods scheduled on a Node (spec.nodeName). One small
  * filtered watch, only while the panel is open.
  */
+import { tr } from '@/lib/i18n'
 import { computed, ref, watch } from 'vue'
 import { PodSelector } from '../../wailsjs/go/api/ResourceAPI'
 import type { resources } from '../../wailsjs/go/models'
@@ -73,19 +74,19 @@ const open = (p: { name: string; namespace: string }) => emit('navigate', { kind
 <template>
   <section class="border-b border-zinc-800/70 px-4 py-4 text-xs">
     <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-100">
-      Pods <span class="rounded-full bg-zinc-800 px-1.5 text-[10px] font-normal text-zinc-400">{{ pods.length }}</span>
-      <span v-if="pods.length" class="text-[11px] font-normal text-zinc-500">{{ readyCount }} prontos</span>
-      <span v-if="w.loading.value" class="animate-pulse text-xs font-normal text-zinc-500">carregando…</span>
+      {{ tr('Pods') }} <span class="rounded-full bg-zinc-800 px-1.5 text-[10px] font-normal text-zinc-400">{{ pods.length }}</span>
+      <span v-if="pods.length" class="text-[11px] font-normal text-zinc-500">{{ tr('{n} prontos', { n: readyCount }) }}</span>
+      <span v-if="w.loading.value" class="animate-pulse text-xs font-normal text-zinc-500">{{ tr('carregando…') }}</span>
     </h3>
     <p v-if="selectorError || w.error.value" class="text-rose-300">{{ selectorError || w.error.value }}</p>
-    <p v-else-if="!pods.length && !w.loading.value && ready" class="text-zinc-500">Nenhum pod.</p>
+    <p v-else-if="!pods.length && !w.loading.value && ready" class="text-zinc-500">{{ tr('Nenhum pod.') }}</p>
     <table v-if="pods.length" class="w-full">
       <thead class="text-left text-[11px] text-zinc-500">
         <tr>
-          <th class="py-1 pr-2 font-normal">Nome</th>
-          <th class="px-2 font-normal">Ready</th>
-          <th class="px-2 font-normal">Status</th>
-          <th class="px-2 text-right font-normal">Reinícios</th>
+          <th class="py-1 pr-2 font-normal">{{ tr('Nome') }}</th>
+          <th class="px-2 font-normal">{{ tr('Ready') }}</th>
+          <th class="px-2 font-normal">{{ tr('Status') }}</th>
+          <th class="px-2 text-right font-normal">{{ tr('Reinícios') }}</th>
           <th class="pl-2 font-normal">{{ mode === 'node' ? 'Namespace' : 'Node' }}</th>
         </tr>
       </thead>
@@ -107,6 +108,6 @@ const open = (p: { name: string; namespace: string }) => emit('navigate', { kind
         </tr>
       </tbody>
     </table>
-    <p v-if="pods.length > MAX" class="mt-2 text-zinc-500">mostrando {{ MAX }} de {{ pods.length }}</p>
+    <p v-if="pods.length > MAX" class="mt-2 text-zinc-500">{{ tr('mostrando {a} de {b}', { a: MAX, b: pods.length }) }}</p>
   </section>
 </template>
