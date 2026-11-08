@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -44,10 +45,17 @@ type Session struct {
 	lastUsed atomic.Int64
 }
 
-func newSession(ctx context.Context, name string, cc clientcmd.ClientConfig) (*Session, error) {
+func newSession(ctx context.Context, name string, cc clientcmd.ClientConfig, onUnauthorized func(string)) (*Session, error) {
 	cfg, err := cc.ClientConfig()
 	if err != nil {
 		return nil, fmt.Errorf("build client config for %q: %w", name, err)
+	}
+	if onUnauthorized != nil {
+		// Notice expired credentials on any call, including long-lived watches,
+		// so the UI can offer to log in again right away.
+		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+			return unauthorizedNotifier{rt: rt, fn: func() { onUnauthorized(name) }}
+		})
 	}
 	// Defaults (5 QPS / 10 burst) throttle a UI that opens many views at once.
 	cfg.QPS, cfg.Burst = 50, 100
@@ -122,4 +130,17 @@ func (s *Session) DefaultNamespace() string {
 		return "default"
 	}
 	return ns
+}
+
+type unauthorizedNotifier struct {
+	rt http.RoundTripper
+	fn func()
+}
+
+func (u unauthorizedNotifier) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := u.rt.RoundTrip(r)
+	if err == nil && resp.StatusCode == http.StatusUnauthorized {
+		go u.fn()
+	}
+	return resp, err
 }

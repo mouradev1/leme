@@ -9,12 +9,15 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"runtime/debug"
 	"time"
 
 	"leme/internal/cluster"
 	"leme/internal/platform/events"
 	"leme/internal/portforward"
+	"leme/internal/rancher"
 	"leme/internal/stream"
 	"leme/internal/terminal"
 )
@@ -25,6 +28,7 @@ type Deps struct {
 	Hub       *stream.Hub
 	Terminals *terminal.Manager
 	Forwards  *portforward.Manager
+	Rancher   *rancher.Manager
 	Version   string
 }
 
@@ -37,6 +41,7 @@ type App struct {
 	Helm     *HelmAPI
 	AppInfo  *AppAPI
 	Forward  *PortForwardAPI
+	Ranchers *RancherAPI
 }
 
 func New(d *Deps) *App {
@@ -49,6 +54,7 @@ func New(d *Deps) *App {
 		Helm:     &HelmAPI{d},
 		AppInfo:  &AppAPI{d},
 		Forward:  &PortForwardAPI{d},
+		Ranchers: &RancherAPI{d},
 	}
 }
 
@@ -87,18 +93,26 @@ func (a *App) Shutdown(context.Context) {
 }
 
 func (a *App) Bindings() []any {
-	return []any{a.Cluster, a.Resource, a.Stream, a.Terminal, a.Helm, a.AppInfo, a.Forward}
+	return []any{a.Cluster, a.Resource, a.Stream, a.Terminal, a.Helm, a.AppInfo, a.Forward, a.Ranchers}
 }
 
 // session resolves (and lazily connects) a cluster with a bounded wait.
 func (d *Deps) session(name string) (*cluster.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
+	if err := d.rancherReady(name); err != nil {
+		return nil, err
+	}
 	s, err := d.Clusters.Session(ctx, name)
 	if err == nil {
 		s.Touch()
 	}
-	return s, err
+	var ne *cluster.ExecNotApproved
+	if errors.As(err, &ne) {
+		// The UI recognizes this prefix and asks the user: "exec-approval:<context>|<command>".
+		return nil, fmt.Errorf("exec-approval:%s|%s", ne.Context, ne.Command)
+	}
+	return s, d.rancherErr(name, err)
 }
 
 // stream runs a subscription that keeps the cluster session alive (not

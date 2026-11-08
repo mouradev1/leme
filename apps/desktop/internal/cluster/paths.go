@@ -1,7 +1,9 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
+	"leme/internal/platform/i18n"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,6 +20,10 @@ type KubeconfigFile struct {
 	Exists    bool   `json:"exists"`
 	Removable bool   `json:"removable"` // false for $KUBECONFIG / ~/.kube/config
 	Managed   bool   `json:"managed"`   // pasted into the app (stored in its private dir)
+	// Names are the contexts this file adds to the list; Shadowed are its
+	// contexts left out because an earlier file already uses the same name.
+	Names    []string `json:"names"`
+	Shadowed []string `json:"shadowed"`
 }
 
 func newRules(extra []string) *clientcmd.ClientConfigLoadingRules {
@@ -64,14 +70,26 @@ func (m *Manager) Files() []KubeconfigFile {
 	defer m.mu.RUnlock()
 	out := make([]KubeconfigFile, 0, len(paths))
 	for _, p := range paths {
-		f := KubeconfigFile{Path: p, Removable: slices.Contains(m.extra, p), Managed: isManaged(p)}
+		f := KubeconfigFile{Path: p, Removable: slices.Contains(m.extra, p), Managed: isManaged(p), Names: []string{}, Shadowed: []string{}}
 		_, err := os.Stat(p)
 		f.Exists = err == nil
-		for _, c := range m.raw.Contexts {
+		for name, c := range m.raw.Contexts {
 			if c.LocationOfOrigin == p {
-				f.Contexts++
+				f.Names = append(f.Names, name)
 			}
 		}
+		f.Contexts = len(f.Names)
+		if f.Exists {
+			if own, err := clientcmd.LoadFromFile(p); err == nil {
+				for name := range own.Contexts {
+					if !slices.Contains(f.Names, name) {
+						f.Shadowed = append(f.Shadowed, name)
+					}
+				}
+			}
+		}
+		slices.Sort(f.Names)
+		slices.Sort(f.Shadowed)
 		out = append(out, f)
 	}
 	return out
@@ -94,17 +112,17 @@ func (m *Manager) AddPath(path string) (int, error) {
 	}
 	st, err := os.Stat(abs)
 	if err != nil {
-		return 0, fmt.Errorf("arquivo não encontrado: %s", abs)
+		return 0, fmt.Errorf(i18n.T("arquivo não encontrado: %s", "file not found: %s"), abs)
 	}
 	if st.IsDir() {
-		return 0, fmt.Errorf("%s é uma pasta; selecione o arquivo kubeconfig", abs)
+		return 0, fmt.Errorf(i18n.T("%s é uma pasta; selecione o arquivo kubeconfig", "%s is a folder; pick the kubeconfig file"), abs)
 	}
 	cfg, err := clientcmd.LoadFromFile(abs)
 	if err != nil {
-		return 0, fmt.Errorf("não é um kubeconfig válido: %w", err)
+		return 0, fmt.Errorf(i18n.T("não é um kubeconfig válido: %w", "not a valid kubeconfig: %w"), err)
 	}
 	if len(cfg.Contexts) == 0 {
-		return 0, fmt.Errorf("%s não define nenhum context", abs)
+		return 0, fmt.Errorf(i18n.T("%s não define nenhum context", "%s defines no context"), abs)
 	}
 
 	if !slices.Contains(m.precedence(), abs) {
@@ -130,7 +148,7 @@ func (m *Manager) RemovePath(path string) error {
 	i := slices.Index(m.extra, abs)
 	if i < 0 {
 		m.mu.Unlock()
-		return fmt.Errorf("%s não foi adicionado pelo app (vem de $KUBECONFIG ou ~/.kube/config)", abs)
+		return fmt.Errorf(i18n.T("%s não foi adicionado pelo app (vem de $KUBECONFIG ou ~/.kube/config)", "%s was not added by the app (it comes from $KUBECONFIG or ~/.kube/config)"), abs)
 	}
 	m.extra = slices.Delete(m.extra, i, i+1)
 	m.rules = newRules(m.extra)
@@ -177,14 +195,14 @@ func isManaged(path string) bool {
 func (m *Manager) SaveKubeconfig(name, content string) (SavedKubeconfig, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return SavedKubeconfig{}, fmt.Errorf("cole o conteúdo do kubeconfig")
+		return SavedKubeconfig{}, errors.New(i18n.T(i18n.T("cole o conteúdo do kubeconfig", "paste the kubeconfig content"), "paste the kubeconfig content"))
 	}
 	cfg, err := clientcmd.Load([]byte(content))
 	if err != nil {
-		return SavedKubeconfig{}, fmt.Errorf("conteúdo não é um kubeconfig válido: %w", err)
+		return SavedKubeconfig{}, fmt.Errorf(i18n.T("conteúdo não é um kubeconfig válido: %w", "the content is not a valid kubeconfig: %w"), err)
 	}
 	if len(cfg.Contexts) == 0 {
-		return SavedKubeconfig{}, fmt.Errorf("o kubeconfig não tem nenhum context")
+		return SavedKubeconfig{}, errors.New(i18n.T(i18n.T("o kubeconfig não tem nenhum context", "the kubeconfig has no context"), "the kubeconfig has no context"))
 	}
 	// Same checks kubectl runs: every context points to an existing cluster and
 	// user, cert/key files referenced by path exist, exec plugins are complete.
