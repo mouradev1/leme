@@ -7,8 +7,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"leme/internal/platform/i18n"
 	"net/http"
 	"sort"
 	"strings"
@@ -109,12 +111,12 @@ func (m *Manager) Start(s *cluster.Session, req Request) (Forward, error) {
 		return Forward{}, friendly(err, req.LocalPort)
 	case <-ctx.Done():
 		stop()
-		return Forward{}, fmt.Errorf("o port-forward não ficou pronto a tempo")
+		return Forward{}, errors.New(i18n.T(i18n.T("o port-forward não ficou pronto a tempo", "the port-forward was not ready in time"), "the port-forward was not ready in time"))
 	}
 	ports, err := fw.GetPorts()
 	if err != nil || len(ports) == 0 {
 		stop()
-		return Forward{}, fmt.Errorf("não foi possível abrir a porta local: %v", err)
+		return Forward{}, fmt.Errorf(i18n.T("não foi possível abrir a porta local: %v", "could not open the local port: %v"), err)
 	}
 
 	s.Acquire() // an active forward keeps the cluster session alive
@@ -139,7 +141,7 @@ func (m *Manager) Start(s *cluster.Session, req Request) (Forward, error) {
 		cur, ok := m.all[e.ID]
 		if ok && cur.State == "active" {
 			cur.State = "error"
-			cur.Error = "conexão encerrada"
+			cur.Error = i18n.T("conexão encerrada", "connection closed")
 			if err != nil {
 				cur.Error = err.Error()
 			}
@@ -226,7 +228,7 @@ func resolve(ctx context.Context, kube kubernetes.Interface, req Request) (strin
 			return "", 0, err
 		}
 		if p.Status.Phase != corev1.PodRunning {
-			return "", 0, fmt.Errorf("o pod %s não está rodando (%s)", p.Name, p.Status.Phase)
+			return "", 0, fmt.Errorf(i18n.T("o pod %s não está rodando (%s)", "pod %s is not running (%s)"), p.Name, p.Status.Phase)
 		}
 		return p.Name, req.RemotePort, nil
 	case "service":
@@ -235,7 +237,7 @@ func resolve(ctx context.Context, kube kubernetes.Interface, req Request) (strin
 			return "", 0, err
 		}
 		if len(svc.Spec.Selector) == 0 {
-			return "", 0, fmt.Errorf("o service %s não tem selector (ExternalName ou endpoints manuais): encaminhe direto para um pod", svc.Name)
+			return "", 0, fmt.Errorf(i18n.T("o service %s não tem selector (ExternalName ou endpoints manuais): encaminhe direto para um pod", "service %s has no selector (ExternalName or manual endpoints): forward to a pod instead"), svc.Name)
 		}
 		pods, err := kube.CoreV1().Pods(req.Namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: labels.SelectorFromSet(svc.Spec.Selector).String(),
@@ -245,7 +247,7 @@ func resolve(ctx context.Context, kube kubernetes.Interface, req Request) (strin
 		}
 		return ServiceTarget(svc, pods.Items, req.RemotePort)
 	}
-	return "", 0, fmt.Errorf("tipo não suportado: %s", req.Kind)
+	return "", 0, fmt.Errorf(i18n.T("tipo não suportado: %s", "unsupported kind: %s"), req.Kind)
 }
 
 // ServiceTarget picks a ready pod behind the service and translates the
@@ -258,7 +260,7 @@ func ServiceTarget(svc *corev1.Service, pods []corev1.Pod, servicePort int32) (s
 		}
 	}
 	if sp == nil {
-		return "", 0, fmt.Errorf("o service %s não expõe a porta %d", svc.Name, servicePort)
+		return "", 0, fmt.Errorf(i18n.T("o service %s não expõe a porta %d", "service %s does not expose port %d"), svc.Name, servicePort)
 	}
 	for _, p := range pods {
 		if p.Status.Phase != corev1.PodRunning || p.DeletionTimestamp != nil || !podReady(p) {
@@ -278,7 +280,7 @@ func ServiceTarget(svc *corev1.Service, pods []corev1.Pod, servicePort int32) (s
 			}
 		}
 	}
-	return "", 0, fmt.Errorf("nenhum pod pronto atrás do service %s", svc.Name)
+	return "", 0, fmt.Errorf(i18n.T("nenhum pod pronto atrás do service %s", "no ready pod behind service %s"), svc.Name)
 }
 
 func podReady(p corev1.Pod) bool {
@@ -292,16 +294,16 @@ func podReady(p corev1.Pod) bool {
 
 func friendly(err error, local int32) error {
 	if err == nil {
-		return fmt.Errorf("o port-forward terminou antes de ficar pronto")
+		return errors.New(i18n.T(i18n.T("o port-forward terminou antes de ficar pronto", "the port-forward ended before it was ready"), "the port-forward ended before it was ready"))
 	}
 	if strings.Contains(err.Error(), "unable to listen") || strings.Contains(err.Error(), "address already in use") {
 		if local > 0 {
-			return fmt.Errorf("a porta local %d já está em uso: escolha outra ou deixe automática", local)
+			return fmt.Errorf(i18n.T("a porta local %d já está em uso: escolha outra ou deixe automática", "local port %d is already in use: pick another or leave it automatic"), local)
 		}
-		return fmt.Errorf("não foi possível abrir uma porta local: %w", err)
+		return fmt.Errorf(i18n.T("não foi possível abrir uma porta local: %w", "could not open a local port: %w"), err)
 	}
 	if strings.Contains(err.Error(), "forbidden") {
-		return fmt.Errorf("sem permissão para port-forward neste namespace: %w", err)
+		return fmt.Errorf(i18n.T("sem permissão para port-forward neste namespace: %w", "no permission to port-forward in this namespace: %w"), err)
 	}
 	return err
 }
