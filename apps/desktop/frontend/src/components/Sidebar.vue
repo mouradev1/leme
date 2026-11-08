@@ -449,14 +449,19 @@ const THEMES: { value: ThemePref; icon: string; label: string }[] = [
 
     <!-- Theme -->
     <div class="flex items-center gap-2 border-t border-zinc-800/80 px-3 py-2">
-      <button class="text-left text-[11px] text-zinc-500 hover:text-zinc-200" :title="tr('Verificar atualizações')" @click="emit('checkUpdate')">
+      <button class="min-w-0 truncate text-left text-[11px] whitespace-nowrap text-zinc-500 hover:text-zinc-200" :title="tr('Verificar atualizações')" @click="emit('checkUpdate')">
         {{ tr('Leme') }} <span class="font-mono">{{ version === 'dev' ? 'dev' : `v${version}` }}</span>
         <span v-if="updateAvailable" class="ml-1 rounded-full bg-sky-500/15 px-1.5 text-sky-300">{{ tr('nova versão') }}</span>
       </button>
       <button
-        class="ml-auto flex h-6 items-center gap-1 rounded px-1.5 text-[11px] text-zinc-500 hover:bg-amber-500/10 hover:text-amber-300"
-        :title="tr('O Leme é gratuito e open source. Um café ajuda a manter o desenvolvimento.')" @click="donate"
-      ><Icon name="coffee" :size="13" />{{ tr('Pague um café') }}</button>
+        class="group/coffee relative ml-auto grid h-6 w-6 shrink-0 place-items-center rounded text-amber-400 hover:bg-amber-500/15 hover:text-amber-300"
+        :aria-label="tr('Pague um café')" @click="donate"
+      >
+        <Icon name="coffee" :size="14" />
+        <span
+          class="pointer-events-none absolute right-0 bottom-full mb-1.5 hidden w-max max-w-56 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-left text-[11px] leading-snug text-zinc-100 shadow-lg group-hover/coffee:block"
+        ><b class="font-medium text-amber-300">{{ tr('Pague um café') }}</b><br />{{ tr('O Leme é gratuito e open source. Um café ajuda a manter o desenvolvimento.') }}</span>
+      </button>
       <button class="grid h-6 w-6 place-items-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" :title="tr('Ajustes')" @click="emit('settings')">
         <Icon name="sliders" :size="13" />
       </button>
