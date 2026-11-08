@@ -7,7 +7,7 @@ toolchain go1.26.10
 require (
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/godbus/dbus/v5 v5.1.0
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/wailsapp/wails/v2 v2.17.1
 	golang.org/x/mod v0.42.0
 	golang.org/x/sync v0.24.0
