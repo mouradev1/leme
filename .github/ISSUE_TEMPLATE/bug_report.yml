@@ -12,7 +12,7 @@ body:
     attributes:
       label: Leme version
       description: Shown at the bottom of the sidebar.
-      placeholder: v0.3.0
+      placeholder: v0.3.1
     validations:
       required: true
   - type: dropdown
