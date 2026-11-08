@@ -42,6 +42,9 @@ func (a *HelmAPI) Values(cluster, namespace, name string, all bool) (string, err
 }
 
 func (a *HelmAPI) Rollback(cluster, namespace, name string, revision int) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	c, err := a.client(cluster)
 	if err != nil {
 		return err
@@ -50,6 +53,9 @@ func (a *HelmAPI) Rollback(cluster, namespace, name string, revision int) error 
 }
 
 func (a *HelmAPI) Uninstall(cluster, namespace, name string) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	c, err := a.client(cluster)
 	if err != nil {
 		return err
@@ -58,6 +64,9 @@ func (a *HelmAPI) Uninstall(cluster, namespace, name string) error {
 }
 
 func (a *HelmAPI) Install(cluster string, req helm.InstallRequest) (helm.Release, error) {
+	if err := a.d.writable(cluster); err != nil {
+		return helm.Release{}, err
+	}
 	c, err := a.client(cluster)
 	if err != nil {
 		return helm.Release{}, err
@@ -65,4 +74,18 @@ func (a *HelmAPI) Install(cluster string, req helm.InstallRequest) (helm.Release
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	return c.Install(ctx, req)
+}
+
+// Upgrade changes a release's values and/or chart version.
+func (a *HelmAPI) Upgrade(cluster string, req helm.UpgradeRequest) (helm.Release, error) {
+	if err := a.d.writable(cluster); err != nil {
+		return helm.Release{}, err
+	}
+	c, err := a.client(cluster)
+	if err != nil {
+		return helm.Release{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	return c.Upgrade(ctx, req)
 }
