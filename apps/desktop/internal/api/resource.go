@@ -41,6 +41,11 @@ func (a *ResourceAPI) GetYAML(cluster string, ref resources.Ref, namespace, name
 
 // Apply with opts.DryRun=true is what the editor's "Diff" button calls.
 func (a *ResourceAPI) Apply(cluster, yaml string, opts resources.ApplyOptions) (resources.ApplyResult, error) {
+	if !opts.DryRun {
+		if err := a.d.writable(cluster); err != nil {
+			return resources.ApplyResult{}, err
+		}
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return resources.ApplyResult{}, err
@@ -51,6 +56,9 @@ func (a *ResourceAPI) Apply(cluster, yaml string, opts resources.ApplyOptions) (
 }
 
 func (a *ResourceAPI) Delete(cluster string, ref resources.Ref, namespace, name string, force bool) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return err
@@ -61,6 +69,9 @@ func (a *ResourceAPI) Delete(cluster string, ref resources.Ref, namespace, name 
 }
 
 func (a *ResourceAPI) Scale(cluster string, ref resources.Ref, namespace, name string, replicas int32) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return err
@@ -71,6 +82,9 @@ func (a *ResourceAPI) Scale(cluster string, ref resources.Ref, namespace, name s
 }
 
 func (a *ResourceAPI) Restart(cluster string, ref resources.Ref, namespace, name string) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return err
@@ -81,6 +95,9 @@ func (a *ResourceAPI) Restart(cluster string, ref resources.Ref, namespace, name
 }
 
 func (a *ResourceAPI) Cordon(cluster, node string, cordon bool) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return err
@@ -98,6 +115,9 @@ type DrainEvent struct {
 // Drain can take minutes (PDB retries), so it runs as a subscription that
 // streams progress on "drain:<subID>" and can be cancelled with Unsubscribe.
 func (a *ResourceAPI) Drain(subID, cluster, node string, opts ops.DrainOptions) error {
+	if err := a.d.writable(cluster); err != nil {
+		return err
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return err
@@ -158,6 +178,9 @@ func (a *ResourceAPI) GetData(cluster, resource, namespace, name string) (resour
 
 // SetData saves edited keys; returns the new resourceVersion.
 func (a *ResourceAPI) SetData(cluster, resource, namespace, name string, data map[string]string, resourceVersion string) (string, error) {
+	if err := a.d.writable(cluster); err != nil {
+		return "", err
+	}
 	s, err := a.d.session(cluster)
 	if err != nil {
 		return "", err
@@ -199,4 +222,40 @@ func (a *ResourceAPI) WorkloadPods(cluster string, ref resources.Ref, namespace,
 	ctx, cancel := reqCtx(s)
 	defer cancel()
 	return resources.PodsOf(ctx, s, ref, namespace, name)
+}
+
+// Search finds objects by name for the command palette (metadata only).
+func (a *ResourceAPI) Search(cluster string, namespaces []string, query string) ([]resources.SearchHit, error) {
+	s, err := a.d.session(cluster)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := reqCtx(s)
+	defer cancel()
+	return resources.Search(ctx, s, namespaces, query, 40)
+}
+
+// Rollout returns a Deployment's rollout progress and revision history.
+func (a *ResourceAPI) Rollout(cluster, namespace, name string) (ops.Rollout, error) {
+	s, err := a.d.session(cluster)
+	if err != nil {
+		return ops.Rollout{}, err
+	}
+	ctx, cancel := reqCtx(s)
+	defer cancel()
+	return ops.RolloutStatus(ctx, s, namespace, name)
+}
+
+// RolloutUndo rolls a Deployment back to a revision (0 = previous).
+func (a *ResourceAPI) RolloutUndo(cluster, namespace, name string, revision int64) (int64, error) {
+	if err := a.d.writable(cluster); err != nil {
+		return 0, err
+	}
+	s, err := a.d.session(cluster)
+	if err != nil {
+		return 0, err
+	}
+	ctx, cancel := reqCtx(s)
+	defer cancel()
+	return ops.RolloutUndo(ctx, s, namespace, name, revision)
 }
