@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { tr } from '@/lib/i18n'
+import { allowedIn } from '@/lib/guard'
+import { isPinned, togglePin } from '@/lib/recents'
+import RolloutSection from './RolloutSection.vue'
 /**
  * Side panel for one object: properties (server table columns, generic for
  * any kind), labels, owner, live metrics, ConfigMap/Secret data editing and
@@ -101,8 +105,9 @@ const events = computed(() => {
 const HEADER_ACTIONS = ['copy', 'edit', 'delete', 'logs', 'shell']
 // Everything else (node shell, cordon, drain, scale, restart) also lives in the
 // header as icons, after Logs/Shell.
-const quick = computed(() => actionsFor(props.kind, props.row).filter((a) => !HEADER_ACTIONS.includes(a)))
-const hasAction = (a: RowAction) => actionsFor(props.kind, props.row).includes(a)
+const acts = computed(() => allowedIn(props.cluster, actionsFor(props.kind, props.row)))
+const quick = computed(() => acts.value.filter((a) => !HEADER_ACTIONS.includes(a)))
+const hasAction = (a: RowAction) => acts.value.includes(a)
 
 // Logs/Shell container picker: hover the icon to choose a container when the
 // pod has more than one. With a single container, a click goes straight in.
@@ -140,6 +145,8 @@ const dotClass = (c: { state: string; ready: boolean; stateReason: string }) =>
 // Copy the object's name from the header; the icon turns into a check briefly.
 const copied = ref(false)
 let copiedTimer = 0
+const objRef = computed(() => ({ kind: props.kind.kind, name: props.row.name, namespace: props.row.namespace ?? '' }))
+const pinned = computed(() => isPinned(props.cluster, objRef.value))
 async function copyName() {
   await ClipboardSetText(props.row.name)
   copied.value = true
@@ -150,7 +157,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer))
 
 // Drag the left edge to resize; double-click it to restore the default width.
 const panel = usePanelWidth(isPod ? 'details-pod' : 'details', isPod ? 560 : 480)
-const canDelete = computed(() => actionsFor(props.kind, props.row).includes('delete'))
+const canDelete = computed(() => acts.value.includes('delete'))
 </script>
 
 <template>
@@ -158,12 +165,12 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
     <div
       class="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize transition-colors hover:bg-sky-500/40"
       :class="panel.dragging.value && 'bg-sky-500/60'"
-      title="Arraste para redimensionar (duplo clique: tamanho padrão)"
+      :title="tr('Arraste para redimensionar (duplo clique: tamanho padrão)')"
       @mousedown="panel.start" @dblclick="panel.reset"
     />
     <!-- Header -->
     <header class="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-800 px-4">
-      <button v-if="back" class="icon-btn -ml-2" :title="`Voltar para ${back}`" @click="emit('back')"><Icon name="back" :size="15" /></button>
+      <button v-if="back" class="icon-btn -ml-2" :title="tr('Voltar para {a}', { a: back })" @click="emit('back')"><Icon name="back" :size="15" /></button>
       <div class="flex min-w-0 flex-1 items-center gap-1">
         <h2 class="min-w-0 truncate text-[13px] text-zinc-100 select-text" :title="row.name">
           <span class="font-semibold">{{ kind.kind }}:</span> {{ row.name }}
@@ -171,59 +178,63 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
         <button
           class="grid h-6 w-6 shrink-0 place-items-center rounded-md hover:bg-zinc-800"
           :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-100'"
-          :title="copied ? 'Copiado' : 'Copiar nome'" @click="copyName"
+          :title="copied ? tr('Copiado') : tr('Copiar nome')" @click="copyName"
         ><Icon :name="copied ? 'check' : 'copy'" :size="13" /></button>
+        <button
+          class="shrink-0 rounded p-1 hover:bg-zinc-800" :class="pinned ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-200'"
+          :title="pinned ? tr('Desafixar') : tr('Fixar no menu lateral')" @click="togglePin(cluster, objRef)"
+        ><Icon name="pin" :size="13" /></button>
       </div>
-      <span v-if="gone" class="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] text-rose-300">excluído</span>
+      <span v-if="gone" class="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] text-rose-300">{{ tr('excluído') }}</span>
       <div v-if="hasAction('logs')" class="relative" @mouseenter="containers.length > 1 && hoverMenu('logs')" @mouseleave="hoverMenu(null)">
-        <button class="icon-btn" :class="menuOpen === 'logs' && 'bg-zinc-800 text-zinc-100'" title="Logs" @click="openLogs">
+        <button class="icon-btn" :class="menuOpen === 'logs' && 'bg-zinc-800 text-zinc-100'" :title="tr('Logs')" @click="openLogs">
           <Icon name="logs" :size="15" />
         </button>
         <div v-if="menuOpen === 'logs'" class="menu">
-          <div class="menu-title">Logs</div>
+          <div class="menu-title">{{ tr('Logs') }}</div>
           <button class="menu-item" @click="menuOpen = null; emit('action', 'logs', row)">
-            <span class="w-2" /> Todos os containers <span class="ml-auto text-zinc-500">{{ containers.length }}</span>
+            <span class="w-2" /> {{ tr('Todos os containers') }} <span class="ml-auto text-zinc-500">{{ containers.length }}</span>
           </button>
           <div class="my-1 border-t border-zinc-800" />
           <div v-for="c in containers" :key="c.name" class="group flex items-center">
             <button class="menu-item min-w-0 flex-1" @click="pick('logs', c.name)">
               <span class="h-2 w-2 shrink-0 rounded-[2px]" :class="dotClass(c)" />
               <span class="truncate font-mono">{{ c.name }}</span>
-              <span v-if="c.init" class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">init</span>
+              <span v-if="c.init" class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">{{ tr('init') }}</span>
             </button>
             <button
               v-if="c.restartCount" class="mr-1 shrink-0 rounded px-1.5 py-0.5 text-[10px] text-amber-300 hover:bg-zinc-800"
-              :title="`Logs da execução que caiu (${c.restartCount} reinícios)`" @click="pick('previous', c.name)"
-            >anterior</button>
+              :title="tr('Logs da execução que caiu ({a} reinícios)', { a: c.restartCount })" @click="pick('previous', c.name)"
+            >{{ tr('anterior') }}</button>
           </div>
         </div>
       </div>
       <div v-if="hasAction('shell')" class="relative" @mouseenter="runningContainers.length > 1 && hoverMenu('shell')" @mouseleave="hoverMenu(null)">
-        <button class="icon-btn" :class="menuOpen === 'shell' && 'bg-zinc-800 text-zinc-100'" title="Shell" @click="openShell">
+        <button class="icon-btn" :class="menuOpen === 'shell' && 'bg-zinc-800 text-zinc-100'" :title="tr('Shell')" @click="openShell">
           <Icon name="terminal" :size="15" />
         </button>
         <div v-if="menuOpen === 'shell'" class="menu">
-          <div class="menu-title">Shell em</div>
+          <div class="menu-title">{{ tr('Shell em') }}</div>
           <button v-for="c in runningContainers" :key="c.name" class="menu-item" @click="pick('shell', c.name)">
             <span class="h-2 w-2 shrink-0 rounded-[2px]" :class="dotClass(c)" />
             <span class="truncate font-mono">{{ c.name }}</span>
           </button>
-          <p v-if="!runningContainers.length" class="px-3 py-2 text-zinc-500">Nenhum container em execução.</p>
+          <p v-if="!runningContainers.length" class="px-3 py-2 text-zinc-500">{{ tr('Nenhum container em execução.') }}</p>
         </div>
       </div>
       <button
         v-for="a in quick" :key="a" class="icon-btn" :class="dangerous.has(a) && 'hover:!text-rose-300'"
-        :title="actionLabel[a]" @click="emit('action', a, row)"
+        :title="tr(actionLabel[a])" @click="emit('action', a, row)"
       ><Icon :name="actionIcon[a] ?? 'chevron'" :size="15" /></button>
       <span v-if="quick.length" class="mx-0.5 h-4 w-px bg-zinc-800" />
-      <button v-if="peek" class="icon-btn" :title="`Abrir ${kind.kind} na lista`" @click="emit('open')"><Icon name="list" :size="15" /></button>
-      <button class="icon-btn" title="Editar YAML" @click="emit('action', 'edit', row)">
+      <button v-if="peek" class="icon-btn" :title="tr('Abrir {a} na lista', { a: kind.kind })" @click="emit('open')"><Icon name="list" :size="15" /></button>
+      <button class="icon-btn" :title="tr('Editar YAML')" @click="emit('action', 'edit', row)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M11.2 1.8a1.5 1.5 0 0 1 2.1 0l.9.9a1.5 1.5 0 0 1 0 2.1L5.5 13.5 2 14l.5-3.5z" /></svg>
       </button>
-      <button v-if="canDelete" class="icon-btn hover:!text-rose-300" title="Excluir" @click="emit('action', 'delete', row)">
+      <button v-if="canDelete" class="icon-btn hover:!text-rose-300" :title="tr('Excluir')" @click="emit('action', 'delete', row)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M6 1.5h4l.5 1H14v1.5H2V2.5h3.5zM3.2 5h9.6l-.7 9.1a1 1 0 0 1-1 .9H4.9a1 1 0 0 1-1-.9z" /></svg>
       </button>
-      <button class="icon-btn" title="Fechar (Esc)" @click="emit('close')"><Icon name="close" :size="14" /></button>
+      <button class="icon-btn" :title="tr('Fechar (Esc)')" @click="emit('close')"><Icon name="close" :size="14" /></button>
     </header>
 
     <div class="min-h-0 flex-1 overflow-auto">
@@ -235,30 +246,30 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
 
       <section v-if="usage && !isPod" class="grid grid-cols-2 gap-2 border-b border-zinc-800/70 px-4 py-3">
         <div class="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-          <div class="text-[10px] tracking-wide text-zinc-500 uppercase">CPU</div>
+          <div class="text-[10px] tracking-wide text-zinc-500 uppercase">{{ tr('CPU') }}</div>
           <div class="mt-1 font-mono text-lg text-zinc-100">{{ cpu(usage.cpu) }}</div>
         </div>
         <div class="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-          <div class="text-[10px] tracking-wide text-zinc-500 uppercase">Memória</div>
+          <div class="text-[10px] tracking-wide text-zinc-500 uppercase">{{ tr('Memória') }}</div>
           <div class="mt-1 font-mono text-lg text-zinc-100">{{ bytes(usage.memory) }}</div>
         </div>
       </section>
 
       <!-- Properties -->
       <section class="border-b border-zinc-800/70 px-4 pt-4 pb-2">
-        <h3 class="mb-2 text-sm font-semibold text-zinc-100">Properties</h3>
+        <h3 class="mb-2 text-sm font-semibold text-zinc-100">{{ tr('Properties') }}</h3>
         <div class="text-xs">
           <div class="prop">
-            <span class="prop-k">Created</span>
-            <span class="prop-v">{{ age(created, now) }} atrás <span class="text-zinc-500">({{ created ? new Date(created).toLocaleString() : '' }})</span></span>
+            <span class="prop-k">{{ tr('Created') }}</span>
+            <span class="prop-v">{{ tr('{a} atrás', { a: age(created, now) }) }} <span class="text-zinc-500">({{ created ? new Date(created).toLocaleString() : '' }})</span></span>
           </div>
-          <div class="prop"><span class="prop-k">Name</span><span class="prop-v font-mono select-text">{{ row.name }}</span></div>
+          <div class="prop"><span class="prop-k">{{ tr('Name') }}</span><span class="prop-v font-mono select-text">{{ row.name }}</span></div>
           <div v-if="row.namespace" class="prop">
-            <span class="prop-k">Namespace</span>
+            <span class="prop-k">{{ tr('Namespace') }}</span>
             <span class="prop-v"><button class="text-sky-400 hover:underline" @click="emit('navigate', { kind: 'Namespace', search: row.namespace })">{{ row.namespace }}</button></span>
           </div>
           <div class="prop">
-            <span class="prop-k">Labels</span>
+            <span class="prop-k">{{ tr('Labels') }}</span>
             <span class="prop-v">
               <button v-if="labels.length" class="flex items-center gap-1 text-zinc-300 hover:text-zinc-100" @click="labelsOpen = !labelsOpen">
                 {{ labels.length }} Label{{ labels.length > 1 ? 's' : '' }}
@@ -271,7 +282,7 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
             </span>
           </div>
           <div v-if="row.owner" class="prop">
-            <span class="prop-k">Controlled By</span>
+            <span class="prop-k">{{ tr('Controlled By') }}</span>
             <span class="prop-v">
               {{ row.owner.kind }}
               <button class="text-sky-400 hover:underline" @click="emit('navigate', { kind: row.owner.kind, search: row.owner.name, namespace: row.namespace })">{{ row.owner.name }}</button>
@@ -281,13 +292,18 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
             <span class="prop-k truncate" :title="p.name">{{ p.name }}</span>
             <span class="prop-v break-all select-text" :class="STATUS_COLUMNS.has(p.name) ? toneClass[statusTone(p.value)] : ''">{{ p.value }}</span>
           </div>
-          <div class="prop border-none"><span class="prop-k">UID</span><span class="prop-v font-mono text-[11px] text-zinc-500 select-text">{{ row.uid }}</span></div>
+          <div class="prop border-none"><span class="prop-k">{{ tr('UID') }}</span><span class="prop-v font-mono text-[11px] text-zinc-500 select-text">{{ row.uid }}</span></div>
         </div>
       </section>
 
       <PodSection
         v-if="pod?.details.value && row.namespace" :cluster="cluster" :namespace="row.namespace" :name="row.name" :details="pod.details.value"
         @navigate="emit('navigate', $event)" @container="(a, c) => emit('container', a, c, row)"
+      />
+
+      <RolloutSection
+        v-if="kind.group === 'apps' && kind.resource === 'deployments' && row.namespace"
+        :cluster="cluster" :namespace="row.namespace" :name="row.name" :rv="row.rv"
       />
 
       <RelatedPods v-if="relatedMode" :cluster="cluster" :kind="kind" :row="row" :mode="relatedMode" @navigate="emit('navigate', $event)" />
@@ -300,10 +316,10 @@ const canDelete = computed(() => actionsFor(props.kind, props.row).includes('del
       <!-- Events -->
       <section class="px-4 py-4 text-xs">
         <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-100">
-          Events <span class="rounded-full bg-zinc-800 px-1.5 text-[10px] font-normal text-zinc-400">{{ events.length }}</span>
-          <span v-if="ev.loading.value" class="animate-pulse text-xs font-normal text-zinc-500">carregando…</span>
+          {{ tr('Events') }} <span class="rounded-full bg-zinc-800 px-1.5 text-[10px] font-normal text-zinc-400">{{ events.length }}</span>
+          <span v-if="ev.loading.value" class="animate-pulse text-xs font-normal text-zinc-500">{{ tr('carregando…') }}</span>
         </h3>
-        <p v-if="!events.length && !ev.loading.value" class="text-zinc-500">Nenhum evento encontrado.</p>
+        <p v-if="!events.length && !ev.loading.value" class="text-zinc-500">{{ tr('Nenhum evento encontrado.') }}</p>
         <ul class="space-y-2">
           <li v-for="e in events" :key="e.uid" class="rounded-lg border-l-2 bg-zinc-900/60 px-3 py-2" :class="e.type === 'Warning' ? 'border-amber-500' : 'border-zinc-700'">
             <div class="flex items-center gap-2">
